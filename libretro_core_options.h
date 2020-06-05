@@ -731,9 +731,9 @@ struct retro_core_option_definition option_defs_chs[] = {
       "分辨率缩放",
       "'自动'允许切换分辨率。'低分辨率'会可能破坏像素。'高分辨率'会保持最大宽度。",
       {
-         { "auto", '自动' },
-         { "lores", '低分辨率' },
-         { "hires", '高分辨率' },
+         { "auto", "自动" },
+         { "lores", "低分辨率" },
+         { "hires", "高分辨率" },
          { NULL, NULL},
       },
       "auto"
@@ -762,7 +762,7 @@ struct retro_core_option_definition option_defs_chs[] = {
       "显示水平过扫描",
       "显示或切除水平过扫描。'自动'会尝试适配游戏，剪切掉空白区域。",
       {
-         { "auto", '自动' },
+         { "auto", "自动" },
          { "disabled", NULL },
          { "enabled", NULL },
          { NULL, NULL},
