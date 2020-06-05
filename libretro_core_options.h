@@ -728,20 +728,21 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_scaling",
-      "Resolution Scaling",
-      "'auto' will authorize resolution to switch. 'lores' can crush pixels. 'hires' will stay on the maximum width.",
+      "分辨率缩放",
+      "'自动'允许切换分辨率。'低分辨率'会可能破坏像素。'高分辨率'会保持最大宽度。",
       {
-         { "auto", NULL },
-         { "lores", NULL },
-         { "hires", NULL },
+         { "auto", '自动' },
+         { "lores", '低分辨率' },
+         { "hires", '高分辨率' },
          { NULL, NULL},
       },
       "auto"
    },
    {
       "pce_hires_blend",
-      "Hires Blending Strength",
-      "Blend pixels together when in hires mode. Higher values will blur the picture more.",
+      "高分辨率混合强度",
+      "指定高分辨率模式时混合像素的数量。\n"
+	  "值越高会使图像越模糊。",
       {
          { "disabled", NULL },
          { "1", NULL },
@@ -758,10 +759,10 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_h_overscan",
-      "Show Horizontal Overscan",
-      "Show or crop horizontal overscan. 'auto' will try to adapt to games, cropping empty areas.",
+      "显示水平过扫描",
+      "显示或切除水平过扫描。'自动'会尝试适配游戏，剪切掉空白区域。",
       {
-         { "auto", NULL },
+         { "auto", '自动' },
          { "disabled", NULL },
          { "enabled", NULL },
          { NULL, NULL},
@@ -770,8 +771,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_initial_scanline",
-      "Initial Scanline",
-      "First rendered scanline. Higher values will crop the top of the screen.",
+      "初始扫描线",
+      "第一条渲染的扫描的扫描线，高于0的值会剪切屏幕顶部。",
       {
          { "0", NULL },
          { "1", NULL },
@@ -820,8 +821,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_last_scanline",
-      "Last Scanline",
-      "Last rendered scanline. Lower values will crop the bottom of the screen.",
+      "最后一条扫描线",
+      "最后一条渲染的扫描线。低于242的值会剪切屏幕底部。",
       {
          { "208", NULL },
          { "209", NULL },
@@ -864,10 +865,10 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_psgrevision",
-      "PSG Audio Chip (Restart)",
-      "HuC6280 as found in the original PC Engine. HuC6280A as found in the SuperGrafx and CoreGrafx I.",
+      "PSG音频芯片（需重启）",
+      "初代PC Engine使用HuC6280，SuperGrafx和CoreGrafx I使用HuC6280A。",
       {
-         { "auto", NULL },
+         { "auto", "自动" },
          { "HuC6280", NULL },
          { "HuC6280A", NULL },
          { NULL, NULL},
@@ -876,8 +877,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_cddavolume",
-      "(CD) CDDA Volume %",
-      "CD game only. Setting this volume control too high may cause sample clipping.",
+      "(CD) CDDA音量%",
+      "只应用于CD游戏。音量值设置过高可能会导致音频削峰。",
       {
          { "0", NULL },
          { "10", NULL },
@@ -906,8 +907,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_adpcmvolume",
-      "(CD) ADPCM Volume %",
-      "CD game only. Setting this volume control too high may cause sample clipping.",
+      "(CD) ADPCM音量%",
+      "只应用于CD游戏。音量值设置过高可能会导致音频削峰。",
       {
          { "0", NULL },
          { "10", NULL },
@@ -936,8 +937,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_cdpsgvolume",
-      "(CD) CD PSG Volume %",
-      "CD game only. Setting this volume control too high may cause sample clipping.",
+      "(CD) CD PSG音量%",
+      "只应用于CD游戏。音量值设置过高可能会导致音频削峰。",
       {
          { "0", NULL },
          { "10", NULL },
@@ -966,8 +967,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_cdspeed",
-      "(CD) CD Speed",
-      "Faster loading times but can cause issues with a couple of games.",
+      "(CD) CD速度",
+      "设置更快的载入速度，但是可能会使一些游戏产生问题。",
       {
          { "1", NULL },
          { "2", NULL },
@@ -979,8 +980,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_adpcmextraprec",
-      "(CD) ADPCM precision",
-      "Full precision of 12-bits for the MSM5205 ADPCM predictor can reduce whining noise during ADPCM playback.",
+      "(CD) ADPCM精度",
+      "为MSM5205 ADPCM处理器使用12比特全精度可以减少ADPCM回放时的白噪音。",
       {
          { "10-bit", NULL },
          { "12-bit", NULL },
@@ -990,8 +991,9 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_resamp_quality",
-      "Owl Resampler Quality",
-      "Higher values give better signal noise ratio and preservation of higher frequencies, but increased computation, a bit of latency and clipping if the volume is set too high.",
+      "音频重采样质量",
+      "值越高信噪比越高，保留的高频信息越多，但是会增加计算量，\n"
+	  "同时如果音量设置太高的话会产生少量延迟和削峰。",
       {
          { "0", NULL },
          { "1", NULL },
@@ -1006,8 +1008,9 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_show_advanced_input_settings",
-      "Show Advanced Input/Turbo Settings",
-      "Show Multitap, Mouse, Turbo Buttons and advanced parameters. NOTE: You need to go back in game and re-enter the menu to refresh the list.",
+      "显示高级输入/连发设置",
+      "显示分插器、鼠标、连发键和高级参数设置。\n"
+	  "注意：须要重新切换菜单以生效。",
       {
          { "enabled",  NULL },
          { "disabled", NULL },
@@ -1017,8 +1020,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_mouse_sensitivity",
-      "Mouse Sensitivity",
-      "Higher values will make the mouse cursor move faster.",
+      "鼠标灵敏度",
+      "值越高鼠标移动越快。",
       {
          { "0.125", NULL },
          { "0.250", NULL },
@@ -1051,8 +1054,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_multitap",
-      "Multitap 5-port Controller",
-      "Enable multitap (TurboTap) emulation.",
+      "手柄5分插控制器",
+      "启用分插器模拟。",
       {
          { "enabled", NULL },
          { "disabled", NULL },
@@ -1062,8 +1065,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_disable_softreset",
-      "Disable Soft Reset (RUN+SELECT)",
-      "If set, when RUN+SEL are pressed simultaneously, disable both buttons temporarily.",
+      "禁用软复位（RUN+SELECT）",
+      "如果启用，同时按下RUN+SELECT键时，两个按键会被暂时禁用。",
       {
          { "disabled", NULL },
          { "enabled", NULL },
@@ -1073,8 +1076,8 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_up_down_allowed",
-      "Allow UP+DOWN/LEFT+RIGHT",
-      "Enabling this will allow pressing / quickly alternating / holding both left and right (or up and down) directions at the same time. This may cause movement-based glitches.",
+      "允许同时按下上+下/左+右键",
+      "启用此项允许同时按下/快速切换/同时按住左右或者上下方向键，这可能会引起移动方面的问题。",
       {
          { "disabled", NULL },
          { "enabled", NULL },
@@ -1084,31 +1087,31 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_Turbo_Delay",
-      "Turbo Delay",
+      "连发速度",
       NULL,
       {
-         { "Fast", NULL },
-         { "Medium", NULL },
-         { "Slow", NULL },
+         { "Fast", "快" },
+         { "Medium", "中" },
+         { "Slow", "慢" },
          { NULL, NULL},
       },
       "Fast"
    },
    {
       "pce_Turbo_Toggling",
-      "Turbo Hotkey",
+      "连发切换键",
       NULL,
       {
          { "disabled", NULL },
-         { "toggle", NULL },
-         { "always", NULL },
+         { "toggle", "切换" },
+         { "always", "总是" },
          { NULL, NULL},
       },
       "disabled"
    },
    {
       "pce_turbo_toggle_hotkey",
-      "Alternate Turbo Hotkey",
+      "备用连发切换键",
       NULL,
       {
          { "disabled", NULL },
@@ -1119,7 +1122,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p0_turbo_I_enable",
-      "P1 Turbo I",
+      "P1按键I连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1130,7 +1133,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p0_turbo_II_enable",
-      "P1 Turbo II",
+      "P1按键II连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1141,7 +1144,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p1_turbo_I_enable",
-      "P2 Turbo I",
+      "P2按键I连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1152,7 +1155,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p1_turbo_II_enable",
-      "P2 Turbo II",
+      "P2按键II连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1163,7 +1166,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p2_turbo_I_enable",
-      "P3 Turbo I",
+      "P3按键I连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1174,7 +1177,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p2_turbo_II_enable",
-      "P3 Turbo II",
+      "P3按键II连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1185,7 +1188,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p3_turbo_I_enable",
-      "P4 Turbo I",
+      "P4按键I连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1196,7 +1199,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p3_turbo_II_enable",
-      "P4 Turbo II",
+      "P4按键II连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1207,7 +1210,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p4_turbo_I_enable",
-      "P5 Turbo I",
+      "P5按键I连发",
       NULL,
       {
          { "disabled", NULL },
@@ -1218,7 +1221,7 @@ struct retro_core_option_definition option_defs_chs[] = {
    },
    {
       "pce_p4_turbo_II_enable",
-      "P5 Turbo II",
+      "P5按键II连发",
       NULL,
       {
          { "disabled", NULL },
