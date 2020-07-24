@@ -724,6 +724,17 @@ struct retro_core_option_definition option_defs_chs[] = {
       "1"
    },
    {
+      "pce_palette",
+      "调色板",
+      "复合视频模式尝试重建原始硬件的输出色彩，在某些游戏上可以显示更多的细节。",
+      {
+         { "RGB", NULL },
+         { "Composite", "复合视频" },
+         { NULL, NULL},
+      },
+      "RGB"
+   },
+   {
       "pce_aspect_ratio",
       "输出宽高比",
       "选择输出宽高比。\n"
