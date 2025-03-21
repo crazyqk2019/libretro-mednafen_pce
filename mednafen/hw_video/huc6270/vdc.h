@@ -331,9 +331,7 @@ public:
 		__GSREG_COUNT
 	};
 
-	// Pass NULL if you don't want more information about the special meaning of the value in the specified
-	// register.  Otherwise, pass a buffer of at least 256 bytes in size.
-	uint32 GetRegister(const unsigned int id, char *special, const uint32 special_len);
+	uint32 GetRegister(const unsigned int id);
 	void SetRegister(const unsigned int id, const uint32 value);
 
 	INLINE bool PeekIRQ(void)
@@ -407,8 +405,6 @@ private:
 
 			if(next_vram_dma_event > 0 && next_vram_dma_event < next_event)
 				next_event = next_vram_dma_event;
-
-			//printf("Next VRAM DMA event: %d(LENR = %d)\n", next_vram_dma_event, LENR);
 		}
 
 		assert(next_event > 0);

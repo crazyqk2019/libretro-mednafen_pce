@@ -135,31 +135,10 @@ void MDFNMP_InstallReadPatches(void)
    unsigned x;
    std::vector<SUBCHEAT>::iterator chit;
    if(!CheatsActive) return;
-
-
-#if 0
-   for(x = 0; x < 8; x++)
-   {
-      for(chit = SubCheats[x].begin(); chit != SubCheats[x].end(); chit++)
-      {
-         if(MDFNGameInfo->InstallReadPatch)
-            MDFNGameInfo->InstallReadPatch(chit->addr);
-      }
-   }
-#endif
 }
 
 void MDFNMP_RemoveReadPatches(void)
 {
-#if 0
- if(MDFNGameInfo->RemoveReadPatches)
-  MDFNGameInfo->RemoveReadPatches();
-#endif
-}
-
-static void CheatMemErr(void)
-{
- MDFN_PrintError(_("Error allocating memory for cheat data."));
 }
 
 /* This function doesn't allocate any memory for "name" */
@@ -208,10 +187,7 @@ int MDFNI_AddCheat(const char *name, uint32 addr, uint64 val, uint64 compare, ch
  char *t;
 
  if(!(t = strdup(name)))
- {
-  CheatMemErr();
   return(0);
- }
 
  if(!AddCheatEntry(t, NULL, addr,val,compare,1,type, length, bigendian))
  {
@@ -280,7 +256,6 @@ static bool TestConditions(const char *string)
  unsigned int bytelen;
  bool passed = 1;
 
- //printf("TR: %s\n", string);
  while(sscanf(string, "%u %c %63s %63s %63s", &bytelen, &endian, address, operation, value) == 5 && passed)
  {
   uint32 v_address;
@@ -309,7 +284,6 @@ static bool TestConditions(const char *string)
    value_at_address |= MemRead(v_address + x) << shiftie;
   }
 
-  //printf("A: %08x, V: %08llx, VA: %08llx, OP: %s\n", v_address, v_value, value_at_address, operation);
   if(!strcmp(operation, ">="))
   {
    if(!(value_at_address >= v_value))
@@ -370,14 +344,11 @@ static bool TestConditions(const char *string)
    if(value_at_address | v_value)
     passed = 0;
   }
-  else
-   puts("Invalid operation");
   string = strchr(string, ',');
   if(string == NULL)
    break;
   else
    string++;
-  //printf("Foo: %s\n", string);
  }
 
  return(passed);
@@ -656,21 +627,3 @@ int MDFNI_ToggleCheat(uint32 which)
 
  return(cheats[which].status);
 }
-
-static void SettingChanged(const char *name)
-{
- MDFNMP_RemoveReadPatches();
-
- CheatsActive = MDFN_GetSettingB("cheats");
-
- RebuildSubCheats();
-
- MDFNMP_InstallReadPatches();
-}
-
-
-MDFNSetting MDFNMP_Settings[] =
-{
- { "cheats", MDFNSF_NOFLAGS, "Enable cheats.", NULL, MDFNST_BOOL, "1", NULL, NULL, NULL, SettingChanged },
- { NULL}
-};

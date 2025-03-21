@@ -1,7 +1,7 @@
 SOURCES_CXX :=
 SOURCES_C   :=
 
-DEPS_DIR     	  := $(CORE_DIR)/deps
+DEPS_DIR     	   := $(CORE_DIR)/deps
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
 MEDNAFEN_DIR      := $(CORE_DIR)/mednafen
 CORE_EMU_DIR      := $(MEDNAFEN_DIR)/pce
@@ -16,69 +16,32 @@ INCFLAGS := -I$(CORE_DIR) \
 			-I$(LIBRETRO_COMM_DIR)/include
 
 LIBCHDR_INCFLAGS = \
-	-I$(DEPS_DIR)/crypto \
-	-I$(DEPS_DIR)/flac-1.3.2/include \
-	-I$(DEPS_DIR)/flac-1.3.2/src/libFLAC/include \
-	-I$(DEPS_DIR)/lzma-16.04/C \
-	-I$(DEPS_DIR)/libchdr
+	-I$(DEPS_DIR)/lzma-19.00/include \
+	-I$(DEPS_DIR)/libchdr/include
 LIBCHDR_SOURCES_C = \
-	$(DEPS_DIR)/crypto/md5.c \
-	$(DEPS_DIR)/crypto/sha1.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/bitmath.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/bitreader.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/cpu.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/crc.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/fixed.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/fixed_intrin_sse2.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/fixed_intrin_ssse3.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/float.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/format.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/lpc.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/lpc_intrin_avx2.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/lpc_intrin_sse2.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/lpc_intrin_sse41.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/lpc_intrin_sse.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/md5.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/memory.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/metadata_iterators.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/metadata_object.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/stream_decoder.c \
-	$(DEPS_DIR)/flac-1.3.2/src/libFLAC/window.c \
-	$(DEPS_DIR)/lzma-16.04/C/Alloc.c \
-	$(DEPS_DIR)/lzma-16.04/C/Bra86.c \
-	$(DEPS_DIR)/lzma-16.04/C/Bra.c \
-	$(DEPS_DIR)/lzma-16.04/C/BraIA64.c \
-	$(DEPS_DIR)/lzma-16.04/C/CpuArch.c \
-	$(DEPS_DIR)/lzma-16.04/C/Delta.c \
-	$(DEPS_DIR)/lzma-16.04/C/LzFind.c \
-	$(DEPS_DIR)/lzma-16.04/C/Lzma86Dec.c \
-	$(DEPS_DIR)/lzma-16.04/C/Lzma86Enc.c \
-	$(DEPS_DIR)/lzma-16.04/C/LzmaDec.c \
-	$(DEPS_DIR)/lzma-16.04/C/LzmaEnc.c \
-	$(DEPS_DIR)/lzma-16.04/C/LzmaLib.c \
-	$(DEPS_DIR)/lzma-16.04/C/Sort.c \
-	$(DEPS_DIR)/libchdr/bitstream.c \
-	$(DEPS_DIR)/libchdr/cdrom.c \
-	$(DEPS_DIR)/libchdr/chd.c \
-	$(DEPS_DIR)/libchdr/flac.c \
-	$(DEPS_DIR)/libchdr/huffman.c
+	$(DEPS_DIR)/lzma-19.00/src/Alloc.c \
+	$(DEPS_DIR)/lzma-19.00/src/Bra86.c \
+	$(DEPS_DIR)/lzma-19.00/src/BraIA64.c \
+	$(DEPS_DIR)/lzma-19.00/src/CpuArch.c \
+	$(DEPS_DIR)/lzma-19.00/src/Delta.c \
+	$(DEPS_DIR)/lzma-19.00/src/LzFind.c \
+	$(DEPS_DIR)/lzma-19.00/src/Lzma86Dec.c \
+	$(DEPS_DIR)/lzma-19.00/src/LzmaDec.c \
+	$(DEPS_DIR)/lzma-19.00/src/LzmaEnc.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_bitstream.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_cdrom.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_chd.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_flac.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_huffman.c
 
-ZLIB_INCFLAGS = -I$(DEPS_DIR)/zlib
+ZLIB_INCFLAGS = -I$(DEPS_DIR)/zlib-1.2.11
 ZLIB_SOURCES_C = \
-	$(DEPS_DIR)/zlib/adler32.c \
-	$(DEPS_DIR)/zlib/compress.c \
-	$(DEPS_DIR)/zlib/crc32.c \
-	$(DEPS_DIR)/zlib/deflate.c \
-	$(DEPS_DIR)/zlib/gzclose.c \
-	$(DEPS_DIR)/zlib/gzlib.c \
-	$(DEPS_DIR)/zlib/gzread.c \
-	$(DEPS_DIR)/zlib/gzwrite.c \
-	$(DEPS_DIR)/zlib/inffast.c \
-	$(DEPS_DIR)/zlib/inflate.c \
-	$(DEPS_DIR)/zlib/inftrees.c \
-	$(DEPS_DIR)/zlib/trees.c \
-	$(DEPS_DIR)/zlib/uncompr.c \
-	$(DEPS_DIR)/zlib/zutil.c
+	$(DEPS_DIR)/zlib-1.2.11/adler32.c \
+	$(DEPS_DIR)/zlib-1.2.11/crc32.c \
+	$(DEPS_DIR)/zlib-1.2.11/inffast.c \
+	$(DEPS_DIR)/zlib-1.2.11/inflate.c \
+	$(DEPS_DIR)/zlib-1.2.11/inftrees.c \
+	$(DEPS_DIR)/zlib-1.2.11/zutil.c
 
 ifneq (,$(findstring msvc2003,$(platform)))
 	INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
@@ -133,10 +96,6 @@ ifeq ($(NEED_BPP), 32)
 	FLAGS += -DWANT_32BPP
 endif
 
-ifeq ($(WANT_NEW_API), 1)
-	FLAGS += -DWANT_NEW_API
-endif
-
 ifeq ($(NO_COMPUTED_GOTO), 1)
 	FLAGS += -DNO_COMPUTED_GOTO
 endif
@@ -172,10 +131,7 @@ endif
 FLAGS += -DNEED_CD
 
 ifeq ($(HAVE_CHD), 1)
-    FLAGS += -DHAVE_CHD -D_7ZIP_ST -DPACKAGE_VERSION=\"1.3.2\" -DFLAC_API_EXPORTS -DFLAC__HAS_OGG=0 -DHAVE_LROUND -DHAVE_STDINT_H -DHAVE_STDLIB_H -DHAVE_SYS_PARAM_H
-    ifeq ($(platform), win)
-        FLAGS += -DHAVE_FSEEKO
-    endif
+	FLAGS += -DHAVE_CHD -D_7ZIP_ST
 
 	ifeq ($(SYSTEM_LIBCHDR), 1)
 		INCFLAGS += $(shell pkg-config --cflags libchdr)
@@ -183,20 +139,15 @@ ifeq ($(HAVE_CHD), 1)
 	else
 		INCFLAGS += $(LIBCHDR_INCFLAGS)
 		SOURCES_C += $(LIBCHDR_SOURCES_C)
-		ifeq ($(platform), win)
-			SOURCES_C += $(DEPS_DIR)/flac-1.3.2/src/libFLAC/windows_unicode_filenames.c
-		endif
 	endif
 
-	ifneq ($(STATIC_LINKING), 1)
-		ifeq ($(SYSTEM_ZLIB), 1)
-			INCFLAGS += $(shell pkg-config --cflags zlib)
-			LIBS += $(shell pkg-config --libs zlib)
-		else
-			INCFLAGS += $(ZLIB_INCFLAGS)
-			SOURCES_C += $(ZLIB_SOURCES_C)
-		endif
-	endif
+    ifeq ($(SYSTEM_ZLIB), 1)
+       INCFLAGS += $(shell pkg-config --cflags zlib)
+       LIBS += $(shell pkg-config --libs zlib)
+    else
+       INCFLAGS += $(ZLIB_INCFLAGS)
+       SOURCES_C += $(ZLIB_SOURCES_C)
+    endif
 
     SOURCES_CXX += $(CDROM_DIR)/CDAccess_CHD.cpp
 endif
@@ -241,5 +192,6 @@ ifneq ($(STATIC_LINKING), 1)
 		$(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c \
 		$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
 		$(LIBRETRO_COMM_DIR)/memmap/memalign.c \
-		$(LIBRETRO_COMM_DIR)/string/stdstring.c
+		$(LIBRETRO_COMM_DIR)/string/stdstring.c \
+		$(LIBRETRO_COMM_DIR)/time/rtime.c
 endif

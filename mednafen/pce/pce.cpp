@@ -17,32 +17,18 @@
 
 #include "pce.h"
 #include "vce.h"
-#include <mednafen/hw_sound/pce_psg/pce_psg.h>
 #include <encodings/crc32.h>
 #include "input.h"
 #include "huc.h"
 #include "pcecd.h"
-#include <mednafen/cdrom/scsicd.h>
+#include "../hw_sound/pce_psg/pce_psg.h"
+#include "../cdrom/scsicd.h"
 #include "tsushin.h"
-#include <mednafen/hw_misc/arcade_card/arcade_card.h>
-#include <mednafen/mempatcher.h>
-#include <mednafen/cdrom/cdromif.h>
-#include <mednafen/FileStream.h>
-#include <mednafen/sound/OwlResampler.h>
-
-#include <zlib.h>
-
-#define PCE_DEBUG(x, ...) {  /* printf(x, ## __VA_ARGS__); */ }
-
-extern MDFNGI EmulatedPCE;
-
-static const MDFNSetting_EnumList PSGRevisionList[] =
-{
-	{ "huc6280", PCE_PSG::REVISION_HUC6280, "HuC6280", "HuC6280 as found in the original PC Engine." },
-	{ "huc6280a", PCE_PSG::REVISION_HUC6280A, "HuC6280A", "HuC6280A as found in the SuperGrafx and CoreGrafx I.  Provides proper channel amplitude centering, but may cause clicking in a few games designed with the original HuC6280's sound characteristics in mind." },
-	{ "match", PCE_PSG::_REVISION_COUNT, "Match emulation mode.", "Selects \"huc6280\" for non-SuperGrafx mode, and \"huc6280a\" for SuperGrafx(full) mode." },
-	{ NULL, 0 },
-};
+#include "../hw_misc/arcade_card/arcade_card.h"
+#include "../mempatcher.h"
+#include "../cdrom/cdromif.h"
+#include "../FileStream.h"
+#include "../sound/OwlResampler.h"
 
 static std::vector<CDIF*> *cdifs = NULL;
 
@@ -74,13 +60,11 @@ HuC6280::readfunc NonCheatPCERead[0x100];
 
 static DECLFR(PCEBusRead)
 {
-	PCE_DEBUG("Unmapped Read: %02x %04x\n", A >> 13, A);
 	return(0xFF);
 }
 
 static DECLFW(PCENullWrite)
 {
-	PCE_DEBUG("Unmapped Write: %02x, %08x %02x\n", A >> 13, A, V);
 }
 
 static DECLFR(BaseRAMReadSGX)
@@ -178,8 +162,6 @@ static DECLFR(IORead)
 			break; // Expansion
 	}
 
-	PCE_DEBUG("I/O Unmapped Read: %04x\n", A);
-
 	return(0xFF);
 }
 
@@ -222,10 +204,7 @@ static DECLFW(IOWrite)
 					PCE_TsushinWrite(A & 0x1FFF, V);
 	
 			if(!PCE_IsCD)
-			{
-				PCE_DEBUG("I/O Unmapped Write: %04x %02x\n", A, V);
 				break;
-			}
 
 			if((A & 0x1E00) == 0x1A00)
 			{
@@ -257,7 +236,7 @@ static void PCECDIRQCB(bool asserted)
 static int LoadCommon(void);
 static void LoadCommonPre(void);
 
-static void SetCDSettings(bool silent_status = false)
+static void SetCDSettings(void)
 {
 	double cdpsgvolume;
 	PCECD_Settings cd_settings;
@@ -269,23 +248,8 @@ static void SetCDSettings(bool silent_status = false)
 	cd_settings.ADPCM_ExtraPrecision = MDFN_GetSettingB("pce.adpcmextraprec");
 	cd_settings.CD_Speed = MDFN_GetSettingUI("pce.cdspeed");
 
-	if(!silent_status)
-	{
-		if(cd_settings.CDDA_Volume != 1.0 || cd_settings.ADPCM_Volume != 1.0 || cdpsgvolume != 1.0)
-		{
-			MDFN_printf("CD-DA Volume: %d%%\n", (int)(100 * cd_settings.CDDA_Volume));
-			MDFN_printf("ADPCM Volume: %d%%\n", (int)(100 * cd_settings.ADPCM_Volume));
-			MDFN_printf("CD PSG Volume: %d%%\n", (int)(100 * cdpsgvolume));
-		}
-	}
-
 	PCECD_SetSettings(&cd_settings);
 	psg->SetVolume(0.678 * cdpsgvolume);
-}
-
-void CDSettingChanged(const char *name)
-{
-	SetCDSettings(true);
 }
 
 static const struct
@@ -303,7 +267,7 @@ static const struct
 	{ 0, "" }
 };
 
-MDFN_COLD int PCE_Load(MDFNFILE *fp)
+MDFN_COLD int PCE_Load(const uint8_t *data, size_t size, const char *ext)
 {
 	IsSGX = false;
 
@@ -311,18 +275,18 @@ MDFN_COLD int PCE_Load(MDFNFILE *fp)
 
 	uint32 crc;
 
-	crc = HuC_Load(fp, MDFN_GetSettingB("pce.disable_bram_hucard"));
+	crc = HuC_Load(data, size, MDFN_GetSettingB("pce.disable_bram_hucard"));
 
-	if(!strcmp(fp->ext, "sgx"))
+	if(!strcmp(ext, "sgx"))
 		IsSGX = true;
 	else
 	{
-		for(int lcv = 0; sgx_table[lcv].crc; lcv++)
+		unsigned lcv;
+		for(lcv = 0; sgx_table[lcv].crc; lcv++)
 		{
 			if(sgx_table[lcv].crc == crc)
 			{
 				IsSGX = true;
-				MDFN_printf("SuperGrafx: %s\n", sgx_table[lcv].name);
 				break;
 			}
 		}
@@ -354,6 +318,7 @@ static MDFN_COLD void LoadCommonPre(void)
 
 static MDFN_COLD int LoadCommon(void)
 { 
+	int i;
 	IsSGX |= MDFN_GetSettingB("pce.forcesgx") ? 1 : 0;
 
 	// Don't modify IsSGX past this point.
@@ -362,10 +327,7 @@ static MDFN_COLD int LoadCommon(void)
 	vce = new VCE(IsSGX, vram_size);
 	vce->SetVDCUnlimitedSprites(MDFN_GetSettingB("pce.nospritelimit"));
 
-	if(IsSGX)
-		MDFN_printf("SuperGrafx Emulation Enabled.\n");
-
-	for(int i = 0xF8; i < 0xFC; i++)
+	for(i = 0xF8; i < 0xFC; i++)
 	{
 		HuCPU.SetReadHandler(i, IsSGX ? BaseRAMReadSGX : BaseRAMRead);
 		HuCPU.SetWriteHandler(i, IsSGX ? BaseRAMWriteSGX : BaseRAMWrite);
@@ -380,6 +342,8 @@ static MDFN_COLD int LoadCommon(void)
 
 	HuCPU.SetReadHandler(0xFF, IORead);
 	HuCPU.SetWriteHandler(0xFF, IOWrite);
+	
+	HuCPU.SetOverclock(MDFN_GetSettingUI("pce.ocmultiplier"));
 
 	int psgrevision = MDFN_GetSettingI("pce.psgrevision");
 
@@ -388,14 +352,6 @@ static MDFN_COLD int LoadCommon(void)
 		psgrevision = IsSGX ? PCE_PSG::REVISION_HUC6280A : PCE_PSG::REVISION_HUC6280;
 	}
 
-	for(const MDFNSetting_EnumList *el = PSGRevisionList; el->string; el++)
-	{
-		if(el->number == psgrevision)
-		{
-			MDFN_printf("PSG Revision: %s\n", el->description);
-			break;
-		}
-	}
 	psg = new PCE_PSG(HRBufs[0]->Buf(), HRBufs[1]->Buf(), psgrevision);
 
 	psg->SetVolume(1.0);
@@ -407,16 +363,8 @@ static MDFN_COLD int LoadCommon(void)
 
 	PCE_Power();
 
-	MDFNGameInfo->fps = (uint32)((double)7159090.90909090 / 455 / 263 * 65536 * 256);
-
 	for(unsigned int i = 0; i < 0x100; i++)
 		NonCheatPCERead[i] = HuCPU.GetReadHandler(i);
-
-	MDFNGameInfo->nominal_height = MDFN_GetSettingUI("pce.slend") - MDFN_GetSettingUI("pce.slstart") + 1;
-	MDFNGameInfo->nominal_width = MDFN_GetSettingB("pce.h_overscan") ? 320 : 288;
-
-	MDFNGameInfo->lcm_width = MDFN_GetSettingB("pce.h_overscan") ? 1120 : 1024;
-	MDFNGameInfo->lcm_height = MDFNGameInfo->nominal_height;
 
 	vce->SetShowHorizOS(MDFN_GetSettingB("pce.h_overscan")); 
 
@@ -452,7 +400,6 @@ static bool DetectGECD(CDIF *cdiface)	// Very half-assed detection until(if) we 
 					};
 					uint32 zecrc = encoding_crc32(0, sector_buffer, 2048);
 
-					//printf("%04x\n", zecrc);
 					for(unsigned int i = 0; i < sizeof(known_crcs) / sizeof(uint32); i++)
 						if(known_crcs[i] == zecrc)
 							return(true);
@@ -500,22 +447,17 @@ MDFN_COLD int PCE_LoadCD(std::vector<CDIF *> *CDInterfaces)
 	const char *bios_sname = DetectGECD((*CDInterfaces)[0]) ? "pce.gecdbios" : "pce.cdbios";
 	std::string bios_path = MDFN_GetSettingS("filesys.path_firmware") + "/" + MDFN_GetSettingS(bios_sname).c_str();
 
-	if (log_cb)
-		MDFN_printf("Loading bios %s\n", bios_path.c_str());
-
 	MDFNFILE *fp = file_open(bios_path.c_str());
 	if (!fp)
 	{
-		MDFN_printf("Error: Failed to load bios!\n");
+		MDFN_DispMessage("Firmware not found: '%s'", bios_path.c_str());
 		return 0;
 	}
 
 	bool disable_bram_cd = MDFN_GetSettingB("pce.disable_bram_cd");
 
-	if(disable_bram_cd)
-		MDFN_printf("Warning: BRAM is disabled per pcfx.disable_bram_cd setting.  This is simulating a malfunction.\n");
-
-	HuC_Load(fp, disable_bram_cd, PCE_ACEnabled ? SYSCARD_ARCADE : SYSCARD_3);
+	HuC_Load(fp->data, fp->size, disable_bram_cd, PCE_ACEnabled ? SYSCARD_ARCADE : SYSCARD_3);
+	file_close(fp);
 
 	ADPCMBuf = new RavenBuffer();
 	for(unsigned lr = 0; lr < 2; lr++)
@@ -528,8 +470,6 @@ MDFN_COLD int PCE_LoadCD(std::vector<CDIF *> *CDInterfaces)
 
 	SCSICD_SetDisc(true, NULL, true);
 	SCSICD_SetDisc(false, (*cdifs)[0], true);
-
-	MDFN_printf("Arcade Card Emulation:  %s\n", PCE_ACEnabled ? "Enabled" : "Disabled");
 
 	return LoadCommon();
 }
@@ -592,7 +532,6 @@ void Emulate(EmulateSpecStruct *espec)
 {
 	es = espec;
 
-	espec->MasterCycles = 0;
 	espec->SoundBufSize = 0;
 
 	MDFNMP_ApplyPeriodicCheats();
@@ -603,19 +542,14 @@ void Emulate(EmulateSpecStruct *espec)
 	if(espec->SoundFormatChanged)
 		SetSoundRate(espec->SoundRate);
 
-	//int t = MDFND_GetTime();
-
 	vce->StartFrame(espec->surface, &espec->DisplayRect, espec->LineWidths, espec->skip);
 
-	// Begin loop here:
-	//for(int i = 0; i < 2; i++)
 	bool rp_rv;
 	bool start_frame = true;
 
 	do
 	{
 		assert(HuCPU.Timestamp() < 12);
-		//printf("ST: %d\n", HuCPU.Timestamp());
 
 		INPUT_Frame(start_frame);
 
@@ -656,7 +590,6 @@ void Emulate(EmulateSpecStruct *espec)
 
 			if(espec->SoundBuf && HRRes)
 			{
-				//printf("%04x\n", rsc);
 				new_sc = HRRes->Resample(HRBufs[ch], rsc, espec->SoundBuf + (espec->SoundBufSize * 2) + ch, espec->SoundBufMaxSize - espec->SoundBufSize, espec->NeedSoundReverse);
 			}
 			else
@@ -690,7 +623,6 @@ void Emulate(EmulateSpecStruct *espec)
 		//
 		//
 		PCE_TimestampBase += end_timestamp - end_timestamp_mod12;
-		espec->MasterCycles += end_timestamp - end_timestamp_mod12;
 
 		if(!rp_rv)
 			MDFN_MidSync(espec);
@@ -699,11 +631,6 @@ void Emulate(EmulateSpecStruct *espec)
 		start_frame = false;
 	} while(!rp_rv);
 
-	//printf("%d\n", MDFND_GetTime() - t);
-
-	// End loop here.
-	//printf("%d\n", vce->GetScanlineNo());
-	
 	vce->EndFrame(&espec->DisplayRect);
 }
 
@@ -745,7 +672,6 @@ void PCE_Power(void)
 
 	if(PCE_IsCD)
 		vce->SetCDEvent(PCECD_Power(timestamp));
-	//printf("%d\n", HuCPU.Timestamp());
 }
 
 void DoSimpleCommand(int cmd)
@@ -756,48 +682,6 @@ void DoSimpleCommand(int cmd)
 		case MDFN_MSC_POWER: PCE_Power(); break;
 	}
 }
-
-static const MDFNSetting PCESettings[] = 
-{
-	{ "pce.input.multitap", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, "Enable multitap(TurboTap) emulation.", NULL, MDFNST_BOOL, "1" },
-
-	{ "pce.slstart", MDFNSF_NOFLAGS, "First rendered scanline.", NULL, MDFNST_UINT, "4", "0", "239" },
-	{ "pce.slend", MDFNSF_NOFLAGS, "Last rendered scanline.", NULL, MDFNST_UINT, "235", "0", "239" },
-
-	{ "pce.h_overscan", MDFNSF_NOFLAGS, "Show horizontal overscan area.", NULL, MDFNST_BOOL, "0" },
-
-	{ "pce.mouse_sensitivity", MDFNSF_NOFLAGS, "Emulated mouse sensitivity.", NULL, MDFNST_FLOAT, "0.50", NULL, NULL, NULL, PCEINPUT_SettingChanged },
-	{ "pce.disable_softreset", MDFNSF_NOFLAGS, "If set, when RUN+SEL are pressed simultaneously, disable both buttons temporarily.", NULL, MDFNST_BOOL, "0", NULL, NULL, NULL, PCEINPUT_SettingChanged },
-
-	{ "pce.disable_bram_cd", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, "Disable BRAM(saved game memory) for CD games.", "It is intended for viewing CD games' error screens that may be different from simple BRAM full and uninitialized BRAM error screens, though it can cause the game to crash outright.", MDFNST_BOOL, "0" },
-	{ "pce.disable_bram_hucard", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, "Disable BRAM(saved game memory) for HuCard games.", "It is intended for changing the behavior(passwords vs save games) of some HuCard games.", MDFNST_BOOL, "0" },
-
-	{ "pce.forcesgx", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, "Force SuperGrafx emulation.", 
-	  "Enabling this option is not necessary to run unrecognized PCE ROM images in SuperGrafx mode, and enabling it is discouraged; ROM images with a file extension of \".sgx\" will automatically enable SuperGrafx emulation.", MDFNST_BOOL, "0" },
-
-	{ "pce.arcadecard", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, "Enable Arcade Card emulation.", 
-	  "Leaving this option enabled is recommended, unless you want to see special warning screens on ACD games, or you prefer the non-enhanced modes of ACD-enhanced SCD games.  Additionally, you may want to disable it you you wish to use state rewinding with a SCD ACD-enhanced game on a slow CPU, as the extra 2MiB of RAM the Arcade Card offers is difficult to compress in real-time.", MDFNST_BOOL, "1" },
-
-	{ "pce.nospritelimit", MDFNSF_NOFLAGS, "Remove 16-sprites-per-scanline hardware limit.", 
-  	  "WARNING: Enabling this option may cause undesirable graphics glitching on some games(such as \"Bloody Wolf\").", MDFNST_BOOL, "0" },
-
-	{ "pce.cdbios", MDFNSF_EMU_STATE, "Path to the CD BIOS", NULL, MDFNST_STRING, "syscard3.pce" },
-	{ "pce.gecdbios", MDFNSF_EMU_STATE, "Path to the GE CD BIOS", "Games Express CD Card BIOS (Unlicensed)", MDFNST_STRING, "gecard.pce" },
-
-	{ "pce.psgrevision", MDFNSF_NOFLAGS, "Select PSG revision.", "WARNING: HES playback will always use the \"huc6280a\" revision if this setting is set to \"match\", since HES playback is always done with SuperGrafx emulation enabled.", MDFNST_ENUM, "match", NULL, NULL, NULL, NULL, PSGRevisionList  },
-
-	{ "pce.cdpsgvolume", MDFNSF_NOFLAGS, "PSG volume when playing a CD game.", "Setting this volume control too high may cause sample clipping.", MDFNST_UINT, "100", "0", "200", NULL, CDSettingChanged },
-	{ "pce.cddavolume", MDFNSF_NOFLAGS, "CD-DA volume.", "Setting this volume control too high may cause sample clipping.", MDFNST_UINT, "100", "0", "200", NULL, CDSettingChanged },
-	{ "pce.adpcmvolume", MDFNSF_NOFLAGS, "ADPCM volume.", "Setting this volume control too high may cause sample clipping.", MDFNST_UINT, "100", "0", "200", NULL, CDSettingChanged },
-	{ "pce.adpcmextraprec", MDFNSF_NOFLAGS, "Output the full 12-bit ADPCM predictor.", "Enabling this option causes the MSM5205 ADPCM predictor to be outputted with full precision of 12-bits, rather than only outputting 10-bits of precision(as an actual MSM5205 does).  Enable this option to reduce whining noise during ADPCM playback.", MDFNST_BOOL, "0" },
-
-	{ "pce.resamp_quality", MDFNSF_NOFLAGS, "Sound quality.", "Higher values correspond to better SNR and better preservation of higher frequencies(\"brightness\"), at the cost of increased computational complexity and a negligible increase in latency.\n\nHigher values will also slightly increase the probability of sample clipping(relevant if Mednafen's volume control settings are set too high), due to increased (time-domain) ringing.", MDFNST_INT, "3", "0", "5" },
-	{ "pce.resamp_rate_error", MDFNSF_NOFLAGS, "Sound output rate tolerance.", "Lower values correspond to better matching of the output rate of the resampler to the actual desired output rate, at the expense of increased RAM usage and poorer CPU cache utilization.", MDFNST_FLOAT, "0.0000009", "0.0000001", "0.0000350" },
-
-	{ "pce.vramsize", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE | MDFNSF_SUPPRESS_DOC, "Size of emulated VRAM per VDC in 16-bit words.  DO NOT CHANGE THIS UNLESS YOU KNOW WTF YOU ARE DOING.", NULL, MDFNST_UINT, "32768", "32768", "65536" },
-
-	{ NULL }
-};
 
 static DECLFR(CheatReadFunc)
 {
@@ -840,13 +724,6 @@ static void SetLayerEnableMask(uint64 mask)
 	vce->SetLayerEnableMask(mask);
 }
 
-static const FileExtensionSpecStruct KnownExtensions[] =
-{
-	{ ".pce", "PC Engine ROM Image" },
-	{ ".sgx", "SuperGrafx ROM Image" },
-	{ NULL, NULL }
-};
-
 static bool SetSoundRate(double rate)
 {
 	if(HRRes)
@@ -857,18 +734,19 @@ static bool SetSoundRate(double rate)
 
 	if(rate > 0)
 	{
+		uint8_t i;
 		HRRes = new OwlResampler(PCE_MASTER_CLOCK / 12, rate, MDFN_GetSettingF("pce.resamp_rate_error"), 20, MDFN_GetSettingUI("pce.resamp_quality"));
-		for(unsigned i = 0; i < 2; i++)
+		for(i = 0; i < 2; i++)
 			HRRes->ResetBufResampState(HRBufs[i]);
 	}
 
 	return(true);
 }
 
-void SettingsChanged()
+void SettingsChanged(void)
 {
 	if(PCE_IsCD)
-		CDSettingChanged("cdrom");
+		SetCDSettings();
 
 	PCEINPUT_SettingChanged("input");
 
@@ -877,24 +755,3 @@ void SettingsChanged()
 	vce->SetVDCUnlimitedSprites(MDFN_GetSettingB("pce.nospritelimit"));
 	vce->SetShowHorizOS(MDFN_GetSettingB("pce.h_overscan"));
 }
-
-MDFNGI EmulatedPCE =
-{
-	PCESettings,
-	MDFN_MASTERCLOCK_FIXED(PCE_MASTER_CLOCK),
-	0,
-
-	true,  	// Multires possible?
-
-	0,   	// lcm_width
-	0,   	// lcm_height           
-	NULL,  	// Dummy
-
-	512,   	// Nominal width
-	243,   	// Nominal height
-
-	1365,	// Framebuffer width
-	270,	// Framebuffer height
-
-	2,     	// Number of output sound channels
-};

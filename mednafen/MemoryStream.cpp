@@ -91,12 +91,6 @@ INLINE void MemoryStream::grow_if_necessary(uint64 new_required_size)
    if(new_required_alloced < new_required_size || new_required_alloced > SIZE_MAX)
     new_required_alloced = SIZE_MAX;
 
-#if 0
-   // If constrained alloc size isn't enough, throw an out-of-memory/address-space type error.
-   if(new_required_alloced < new_required_size)
-    throw MDFN_Error(ErrnoHolder(ENOMEM));
-#endif
-
    new_data_buffer = (uint8*)realloc(data_buffer, new_required_alloced);
 
    //
@@ -111,32 +105,23 @@ INLINE void MemoryStream::grow_if_necessary(uint64 new_required_size)
  }
 }
 
-uint64 MemoryStream::read(void *data, uint64 count, bool error_on_eos)
+uint64 MemoryStream::read(void *data, uint64 count)
 {
- if(count > data_buffer_size)
- {
-  count = data_buffer_size;
- }
+   if(count > data_buffer_size)
+      count = data_buffer_size;
 
- if((uint64)position > (data_buffer_size - count))
- {
-  count = data_buffer_size - position;
- }
+   if((uint64)position > (data_buffer_size - count))
+      count = data_buffer_size - position;
 
- memmove(data, &data_buffer[position], count);
- position += count;
+   memmove(data, &data_buffer[position], count);
+   position += count;
 
- return count;
+   return count;
 }
 
 void MemoryStream::write(const void *data, uint64 count)
 {
  uint64 nrs = position + count;
-
-#if 0
- if(nrs < position)
-  throw MDFN_Error(ErrnoHolder(EFBIG));
-#endif
 
  grow_if_necessary(nrs);
 

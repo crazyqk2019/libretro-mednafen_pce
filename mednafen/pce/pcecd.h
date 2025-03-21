@@ -31,7 +31,7 @@ enum
 	CD_GSREG_ADPCM_ENDREACHED,
 };
 
-uint32 PCECD_GetRegister(const unsigned int id, char *special, const uint32 special_len);
+uint32 PCECD_GetRegister(const unsigned int id);
 void PCECD_SetRegister(const unsigned int id, const uint32 value);
 
 
@@ -56,6 +56,8 @@ int PCECD_StateAction(StateMem *sm, const unsigned load, const bool data_only);
 
 void ADPCM_PeekRAM(uint32 Address, uint32 Length, uint8 *Buffer);
 void ADPCM_PokeRAM(uint32 Address, uint32 Length, const uint8 *Buffer);
+
+void StuffSubchannel(uint8 meow, int subindex);
 
 #endif
 

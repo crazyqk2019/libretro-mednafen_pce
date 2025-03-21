@@ -19,7 +19,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include "cdromif.h"
-#include "CDAccess.h"
 #include "../general.h"
 
 #include <algorithm>
@@ -76,19 +75,17 @@ class CDIF_ST : public CDIF
       virtual void HintReadSector(int32_t lba);
       virtual bool ReadRawSector(uint8_t *buf, int32_t lba);
       virtual bool ReadRawSectorPWOnly(uint8_t* pwbuf, int32_t lba, bool hint_fullread);
-
-   private:
-      CDAccess *disc_cdaccess;
 };
 
-CDIF::CDIF() : UnrecoverableError(false)
+CDIF::CDIF(CDAccess *cda) : UnrecoverableError(false), disc_cdaccess(cda)
 {
 
 }
 
 CDIF::~CDIF()
 {
-
+   if (disc_cdaccess)
+      delete disc_cdaccess;
 }
 
 
@@ -137,27 +134,21 @@ int CDIF::ReadSector(uint8_t* buf, int32_t lba, uint32_t sector_count, bool supp
    int ret = 0;
 
    if(UnrecoverableError)
-      return(false);
+      return 0;
 
    while(sector_count--)
    {
       uint8_t tmpbuf[2352 + 96];
 
       if(!ReadRawSector(tmpbuf, lba))
-      {
-         puts("CDIF Raw Read error");
-         return(FALSE);
-      }
+         return 0;
 
       if(!ValidateRawSector(tmpbuf))
       {
          if(!suppress_uncorrectable_message)
-         {
             MDFN_DispMessage("Uncorrectable data at sector %d", lba);
-            MDFN_PrintError("Uncorrectable data at sector %d", lba);
-         }
 
-         return(false);
+         return 0;
       }
 
       const int mode = tmpbuf[12 + 3];
@@ -166,24 +157,17 @@ int CDIF::ReadSector(uint8_t* buf, int32_t lba, uint32_t sector_count, bool supp
          ret = mode;
 
       if(mode == 1)
-      {
          memcpy(buf, &tmpbuf[12 + 4], 2048);
-      }
       else if(mode == 2)
-      {
          memcpy(buf, &tmpbuf[12 + 4 + 8], 2048);
-      }
       else
-      {
-         printf("CDIF_ReadSector() invalid sector type at LBA=%u\n", (unsigned int)lba);
-         return(false);
-      }
+         return 0;
 
       buf += 2048;
       lba++;
    }
 
-   return(ret);
+   return ret;
 }
 
 //
@@ -192,18 +176,11 @@ int CDIF::ReadSector(uint8_t* buf, int32_t lba, uint32_t sector_count, bool supp
 //
 //
 
-CDIF_ST::CDIF_ST(CDAccess *cda) : disc_cdaccess(cda)
+CDIF_ST::CDIF_ST(CDAccess *cda) : CDIF(cda)
 {
-   //puts("***WARNING USING SINGLE-THREADED CD READER***");
-
    UnrecoverableError = false;
 
    disc_cdaccess->Read_TOC(&disc_toc);
-
-   if(disc_toc.first_track < 1 || disc_toc.last_track > 99 || disc_toc.first_track > disc_toc.last_track)
-   {
-      printf("TOC first(%d)/last(%d) track numbers bad.", disc_toc.first_track, disc_toc.last_track);
-   }
 }
 
 CDIF_ST::~CDIF_ST()
@@ -221,19 +198,18 @@ bool CDIF_ST::ReadRawSector(uint8_t *buf, int32_t lba)
    if(UnrecoverableError)
    {
       memset(buf, 0, 2352 + 96);
-      return(false);
+      return false;
    }
 
    if(lba < LBA_Read_Minimum || lba > LBA_Read_Maximum)
    {
-      printf("Attempt to read sector out of bounds; LBA=%d\n", lba);
       memset(buf, 0, 2352 + 96);
-      return(false);
+      return false;
    }
 
    disc_cdaccess->Read_Raw_Sector(buf, lba);
 
-   return(true);
+   return true;
 }
 
 bool CDIF_ST::ReadRawSectorPWOnly(uint8_t* pwbuf, int32_t lba, bool hint_fullread)
@@ -241,28 +217,25 @@ bool CDIF_ST::ReadRawSectorPWOnly(uint8_t* pwbuf, int32_t lba, bool hint_fullrea
    if(UnrecoverableError)
    {
       memset(pwbuf, 0, 96);
-      return(false);
+      return false;
    }
 
    if(lba < LBA_Read_Minimum || lba > LBA_Read_Maximum)
    {
-      printf("Attempt to read sector out of bounds; LBA=%d\n", lba);
       memset(pwbuf, 0, 96);
-      return(false);
+      return false;
    }
 
-   if(disc_cdaccess->Fast_Read_Raw_PW_TSRE(pwbuf, lba))
-      return(true);
-   else
+   if (!disc_cdaccess->Fast_Read_Raw_PW_TSRE(pwbuf, lba))
    {
       uint8_t tmpbuf[2352 + 96];
-      bool ret;
-
-      ret = ReadRawSector(tmpbuf, lba);
+      bool ret = ReadRawSector(tmpbuf, lba);
       memcpy(pwbuf, tmpbuf + 2352, 96);
 
       return ret;
    }
+
+   return(true);
 }
 
 CDIF *CDIF_Open(const std::string& path, bool image_memcache)

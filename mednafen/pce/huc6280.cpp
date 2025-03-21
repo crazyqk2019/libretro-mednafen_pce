@@ -90,7 +90,6 @@ void INLINE HuC6280::X_ZNT(const uint8 zort)
 	P |= ZNTable[zort];
 }
 
-template<bool DebugMode>
 void INLINE HuC6280::JR(const bool cond, const bool BBRS)
 {
 	if(cond)
@@ -100,9 +99,6 @@ void INLINE HuC6280::JR(const bool cond, const bool BBRS)
 		PC++;
 		ADDCYC(3);
 		PC+=disp;
-
-		if(DebugMode && ADDBT)
-			ADDBT(PC - disp - 2 - (BBRS ? 1 : 0), PC, 0);
 	}
 	else
 	{
@@ -112,16 +108,14 @@ void INLINE HuC6280::JR(const bool cond, const bool BBRS)
 	LastCycle();
 }
 
-template<bool DebugMode>
 void INLINE HuC6280::BBRi(const uint8 val, const unsigned int bitto)
 {
-	JR<DebugMode>(!(val & (1 << bitto)), true);
+	JR(!(val & (1 << bitto)), true);
 }
 
-template<bool DebugMode>
 void INLINE HuC6280::BBSi(const uint8 val, const unsigned int bitto)
 {
-	JR<DebugMode>(val & (1 << bitto), true);
+	JR(val & (1 << bitto), true);
 }
 
 // Total cycles for ST0/ST1/ST2 is effectively 5(4 here, +1 stealcycle in the PC Engine memory handler logic)
@@ -249,8 +243,8 @@ TPREFIX; {					\
 
 // Note: CSL/CSH's speed timing changes take effect for the last CPU cycle of CSL/CSH.  Be cautious
 // not to change the order here:
-#define CSL	{ /*printf("CSL: %04x\n", PC);*/ ADDCYC(2); speed = 0; REDOSPEEDCACHE(); LastCycle(); }
-#define CSH	{ /*printf("CSH: %04x\n", PC);*/ ADDCYC(2); speed = 1; REDOSPEEDCACHE(); LastCycle(); }
+#define CSL	{ ADDCYC(2); speed = 0; REDOSPEEDCACHE(); LastCycle(); }
+#define CSH	{ ADDCYC(2); speed = 1; REDOSPEEDCACHE(); LastCycle(); }
 
 #define RMB(bitto)	x &= ~(1 << (bitto & 7))
 #define SMB(bitto)	x |= 1 << (bitto & 7)
@@ -447,8 +441,6 @@ HuC6280::HuC6280()
 void HuC6280::Init(const bool emulate_wai)
 {
 #ifdef ARCH_X86
-	//printf("%llu\n", (unsigned long long)((uint8*)&FastPageR[0] - (uint8*)this));
-	//printf("Blorp: %016llx\n", (unsigned long long)this);
 	assert(((uint8*)&FastPageR[0] - (uint8*)this) < 128);
 #endif
 
@@ -548,14 +540,12 @@ void HuC6280::HappySync(void)
 	CalcNextEvent();
 }
 
-template<bool DebugMode>
 NO_INLINE void HuC6280::RunSub(void)
 {
 	uint32 old_PC;
 
 	if(in_block_move)
 	{
-		IBM_Dispatch: ;
 		switch(in_block_move)
 		{
 			default:
@@ -569,20 +559,6 @@ NO_INLINE void HuC6280::RunSub(void)
 
 	do
 	{
-		if(DebugMode)
-			old_PC = PC;
-
-		if(DebugMode && CPUHook)
-		{
-			TimerSync();
-			CalcNextEvent();
-			if(CPUHook(PC))
-			{
-				if(in_block_move)
-				goto IBM_Dispatch;
-			}
-		}
-
 		if(IRQSample | IRQlow)
 		{
 			if(MDFN_UNLIKELY(IRQSample & IQRESET))
@@ -599,9 +575,6 @@ NO_INLINE void HuC6280::RunSub(void)
 				IRQSample &= ~IQRESET;
 				IRQlow &= ~IQRESET;
 
-				if(DebugMode && ADDBT)
-					ADDBT(old_PC, PC, 0xFFFE);
-
 				continue;
 			}
 			else
@@ -614,10 +587,6 @@ NO_INLINE void HuC6280::RunSub(void)
 					tmpa = 0xFFF8;
 				else if(IRQSample & IQIRQ2)
 					tmpa = 0xFFF6;
-				//else
-					// puts("DANGER WILL ROBINSON DANGER");
-
-				//printf("IRQ: %04x\n", tmpa);
 
 				if(tmpa)
 				{
@@ -649,9 +618,6 @@ NO_INLINE void HuC6280::RunSub(void)
 
 					LastCycle();	// Cycle 8(internal operation?)
 
-					if(DebugMode && ADDBT)
-						ADDBT(old_PC, PC, tmpa);
-
 					continue;
 				}
 			}
@@ -679,10 +645,7 @@ void HuC6280::Run(const bool StepMode)
 	else
 		runrunrun = 1;
 
-	if(CPUHook || ADDBT)
-		RunSub<true>();
-	else
-		RunSub<false>();
+	RunSub();
 }
 
 uint8 HuC6280::TimerRead(unsigned int address, bool peek)
@@ -707,8 +670,6 @@ void HuC6280::TimerWrite(unsigned int address, uint8 V)
 		{
 			if(timer_status == 0)
 			{
-				//if(timer_inreload)
-				// puts("Oops");
 				timer_div = 1024 * 3;
 				timer_value = timer_load;
 			}

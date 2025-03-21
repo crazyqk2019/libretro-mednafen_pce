@@ -83,9 +83,6 @@ static void InitScrambleTable(void)
 
       scramble_table[i - 12] = z;
    }
-
-   //for(int i = 0; i < 2352 - 12; i++)
-   // printf("0x%02x, ", scramble_table[i]);
 }
 
 void CDUtility_Init(void)
@@ -323,10 +320,6 @@ void subpw_synth_udapp_lba(const TOC& toc, const int32_t lba, const int32_t lba_
    uint32_t lba_relative;
    uint32_t ma, sa, fa;
    uint32_t m, s, f;
-
-   if(lba < -150 || lba >= 0)
-      printf("[BUG] subpw_synth_udapp_lba() lba out of range --- %d\n", lba);
-
    {
       int32_t lba_tmp = lba + lba_subq_relative_offs;
 
@@ -410,16 +403,6 @@ void synth_udapp_sector_lba(uint8_t mode, const TOC& toc, const int32_t lba, int
       }
    }
 }
-
-#if 0
-bool subq_extrapolate(const uint8_t *subq_input, int32_t position_delta, uint8_t *subq_output)
-{
-   assert(subq_check_checksum(subq_input));
-
-
-   subq_generate_checksum(subq_output);
-}
-#endif
 
 void scrambleize_data_sector(uint8_t *sector_data)
 {

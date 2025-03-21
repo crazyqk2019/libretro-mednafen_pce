@@ -17,7 +17,6 @@
 #include "mednafen/pce/input.h"
 #include "mednafen/pce/huc.h"
 #include "mednafen/pce/vce.h"
-#include "mednafen/settings-driver.h"
 #include "mednafen/mempatcher.h"
 #include "mednafen/cdrom/cdromif.h"
 #include "mednafen/cdrom/CDUtility.h"
@@ -28,762 +27,568 @@
 
 #define MEDNAFEN_CORE_NAME_MODULE "pce"
 #define MEDNAFEN_CORE_NAME "Beetle PCE"
-#define MEDNAFEN_CORE_VERSION "v0.9.48"
-#define MEDNAFEN_CORE_EXTENSIONS "pce|cue|ccd|chd|sgx"
+#define MEDNAFEN_CORE_VERSION "v1.29.0"
+#define MEDNAFEN_CORE_EXTENSIONS "pce|sgx|cue|ccd|chd|toc|m3u"
 #define MEDNAFEN_CORE_TIMING_FPS 7159090.90909090 / 455.0 / 263.0
 #define MEDNAFEN_CORE_GEOMETRY_BASE_W 256
 #define MEDNAFEN_CORE_GEOMETRY_BASE_H 224
-#define MEDNAFEN_CORE_GEOMETRY_MAX_W 1365
-#define MEDNAFEN_CORE_GEOMETRY_MAX_H 270
+#define MEDNAFEN_CORE_GEOMETRY_MAX_W 2048
+#define MEDNAFEN_CORE_GEOMETRY_MAX_H 264
 #define MEDNAFEN_CORE_GEOMETRY_ASPECT_RATIO 6.0 / 5.0
-#define FB_WIDTH 1365
-#define FB_HEIGHT 270
+#define FB_WIDTH 2048
+#define FB_HEIGHT 264
 
-static bool old_cdimagecache = false;
+static bool cdimagecache = false;
 static bool show_advanced_input_settings = true;
 static bool use_palette = false;
-
-extern MDFNGI EmulatedPCE;
-MDFNGI *MDFNGameInfo = &EmulatedPCE;
 
 static int hires_blend = 0;
 static int blur_passes = 1;
 static int aspect_ratio = 0;
 
-/* Composite palette WIP 2020/06/30
- * made by dshadoff and turboxray from The PC Engine Software Bible Forum
+static unsigned video_width = 0;
+static unsigned video_height = 0;
+
+/* Composite palette 2020/09/14
+ * authors: Dshadoff, Turboxray, Furrtek, Kitrinx and others
  */
 static uint8_t composite_palette[] = {
 	0, 0, 0, 
-	0, 0, 22, 
-	0, 0, 52, 
-	0, 0, 72, 
-	0, 0, 103, 
-	0, 0, 128, 
-	0, 0, 167, 
-	0, 0, 207, 
-	27, 0, 3, 
-	31, 3, 31, 
-	27, 0, 53, 
-	31, 1, 82, 
-	27, 0, 105, 
-	31, 0, 136, 
-	25, 0, 163, 
-	27, 0, 207, 
-	62, 8, 11, 
-	57, 3, 34, 
-	61, 6, 64, 
-	57, 1, 85, 
-	61, 4, 114, 
-	57, 0, 136, 
-	60, 2, 170, 
-	54, 0, 201, 
-	87, 8, 13, 
-	83, 3, 36, 
-	87, 6, 64, 
-	83, 1, 87, 
-	87, 5, 115, 
-	83, 0, 138, 
-	86, 3, 170, 
-	81, 0, 197, 
-	114, 7, 15, 
-	118, 11, 44, 
-	114, 6, 67, 
-	118, 9, 98, 
-	114, 4, 119, 
-	118, 7, 147, 
-	114, 2, 169, 
-	117, 5, 203, 
-	152, 13, 27, 
-	148, 8, 48, 
-	152, 11, 78, 
-	148, 7, 99, 
-	152, 10, 129, 
-	148, 5, 150, 
-	151, 8, 181, 
-	147, 3, 204, 
-	185, 8, 31, 
-	181, 3, 51, 
-	185, 7, 81, 
-	181, 2, 103, 
-	185, 5, 134, 
-	180, 0, 155, 
-	185, 4, 183, 
-	180, 0, 206, 
-	225, 0, 35, 
-	229, 2, 66, 
-	225, 0, 87, 
-	229, 0, 117, 
-	225, 0, 138, 
-	229, 0, 168, 
-	225, 0, 189, 
-	229, 0, 220, 
-	10, 38, 10, 
-	6, 34, 30, 
-	10, 37, 61, 
-	6, 32, 81, 
-	10, 35, 112, 
-	5, 30, 135, 
-	8, 32, 171, 
-	1, 24, 206, 
-	37, 38, 10, 
+	0, 0, 27, 
+	1, 2, 61, 
+	0, 0, 88, 
+	1, 4, 123, 
+	0, 0, 149, 
+	2, 5, 184, 
+	0, 2, 211, 
+	28, 0, 4, 
+	32, 4, 39, 
+	29, 1, 65, 
+	33, 6, 100, 
+	29, 2, 127, 
+	34, 7, 162, 
+	30, 4, 188, 
+	34, 9, 223, 
+	64, 6, 16, 
+	60, 3, 43, 
+	65, 8, 78, 
+	61, 5, 104, 
+	66, 10, 139, 
+	62, 6, 166, 
+	66, 11, 200, 
+	62, 8, 227, 
+	92, 5, 20, 
+	88, 2, 47, 
+	93, 7, 82, 
+	89, 4, 108, 
+	94, 9, 143, 
+	90, 5, 170, 
+	94, 10, 205, 
+	90, 7, 231, 
+	120, 4, 25, 
+	125, 9, 59, 
+	121, 6, 86, 
+	125, 11, 121, 
+	122, 8, 147, 
+	126, 13, 182, 
+	122, 9, 209, 
+	127, 14, 243, 
+	156, 11, 37, 
+	153, 8, 63, 
+	157, 13, 98, 
+	153, 10, 125, 
+	158, 15, 160, 
+	154, 12, 186, 
+	158, 17, 221, 
+	155, 13, 247, 
+	184, 10, 41, 
+	181, 7, 68, 
+	185, 12, 102, 
+	181, 9, 129, 
+	186, 14, 164, 
+	182, 10, 190, 
+	186, 15, 225, 
+	183, 12, 252, 
+	212, 9, 45, 
+	217, 14, 80, 
+	213, 11, 106, 
+	218, 16, 141, 
+	214, 13, 168, 
+	218, 18, 203, 
+	214, 14, 229, 
+	219, 19, 255, 
+	9, 37, 2, 
+	5, 34, 29, 
+	9, 39, 64, 
+	6, 36, 90, 
+	10, 41, 125, 
+	6, 37, 152, 
+	11, 42, 186, 
+	7, 39, 213, 
+	37, 36, 6, 
 	33, 33, 33, 
-	37, 36, 64, 
-	33, 31, 84, 
-	37, 35, 113, 
-	33, 30, 135, 
-	36, 32, 169, 
-	30, 25, 200, 
-	64, 37, 13, 
-	68, 40, 44, 
-	64, 35, 64, 
-	68, 39, 95, 
-	64, 34, 115, 
-	68, 37, 146, 
-	64, 32, 169, 
-	67, 34, 205, 
-	99, 45, 23, 
-	95, 41, 44, 
-	98, 44, 75, 
-	94, 39, 97, 
-	98, 42, 126, 
-	94, 37, 147, 
-	98, 40, 177, 
-	93, 35, 203, 
-	124, 45, 26, 
-	120, 41, 46, 
-	124, 44, 77, 
-	120, 39, 97, 
-	124, 42, 128, 
-	120, 38, 148, 
-	124, 41, 179, 
-	119, 35, 202, 
-	151, 45, 28, 
-	155, 48, 56, 
-	151, 44, 77, 
-	155, 47, 108, 
-	151, 41, 130, 
-	155, 45, 160, 
-	151, 40, 180, 
-	155, 43, 211, 
-	189, 51, 37, 
-	185, 46, 60, 
-	189, 49, 89, 
-	185, 44, 111, 
-	189, 48, 140, 
-	185, 43, 162, 
-	189, 46, 191, 
-	184, 41, 214, 
-	222, 46, 42, 
-	218, 41, 64, 
-	222, 44, 93, 
-	218, 40, 113, 
-	222, 43, 144, 
-	218, 38, 167, 
-	222, 41, 196, 
-	218, 36, 216, 
-	13, 68, 10, 
-	17, 71, 40, 
-	13, 66, 63, 
-	17, 69, 92, 
-	13, 65, 113, 
-	17, 68, 143, 
-	12, 62, 169, 
-	14, 63, 207, 
-	47, 76, 20, 
-	43, 71, 43, 
-	47, 75, 71, 
-	43, 70, 94, 
-	47, 73, 122, 
-	43, 68, 145, 
-	38, 63, 168, 
-	41, 65, 204, 
-	74, 75, 22, 
-	70, 71, 43, 
+	37, 38, 68, 
+	34, 35, 94, 
+	38, 40, 129, 
+	34, 36, 156, 
+	39, 41, 190, 
+	35, 38, 217, 
+	65, 35, 10, 
+	69, 40, 45, 
+	65, 37, 72, 
+	70, 42, 107, 
+	66, 39, 133, 
+	70, 44, 168, 
+	67, 40, 194, 
+	71, 45, 229, 
+	101, 42, 23, 
+	97, 39, 49, 
+	102, 44, 84, 
+	98, 41, 111, 
+	102, 46, 145, 
+	98, 43, 172, 
+	103, 48, 207, 
+	99, 44, 233, 
+	129, 41, 27, 
+	125, 38, 53, 
+	130, 43, 88, 
+	126, 40, 115, 
+	130, 45, 150, 
+	126, 42, 176, 
+	131, 47, 211, 
+	127, 43, 237, 
+	157, 40, 31, 
+	161, 45, 66, 
+	158, 42, 92, 
+	162, 47, 127, 
+	158, 44, 154, 
+	163, 49, 188, 
+	159, 45, 215, 
+	163, 50, 250, 
+	193, 47, 43, 
+	189, 44, 70, 
+	194, 49, 105, 
+	190, 46, 131, 
+	194, 51, 166, 
+	191, 48, 192, 
+	195, 53, 227, 
+	191, 49, 254, 
+	221, 46, 47, 
+	217, 43, 74, 
+	222, 48, 109, 
+	218, 45, 135, 
+	222, 50, 170, 
+	219, 47, 197, 
+	223, 52, 231, 
+	219, 48, 255, 
+	9, 66, 0, 
+	14, 71, 31, 
+	10, 68, 58, 
+	14, 73, 92, 
+	10, 70, 119, 
+	15, 75, 154, 
+	11, 71, 180, 
+	16, 76, 215, 
+	45, 73, 9, 
+	42, 70, 35, 
+	46, 75, 70, 
+	42, 72, 97, 
+	47, 77, 131, 
+	43, 74, 158, 
+	39, 70, 184, 
+	44, 75, 219, 
+	73, 72, 13, 
+	70, 69, 39, 
 	74, 74, 74, 
-	70, 69, 96, 
-	74, 72, 126, 
-	70, 67, 146, 
-	74, 71, 176, 
-	69, 65, 202, 
-	101, 74, 25, 
-	106, 78, 54, 
-	101, 73, 76, 
-	106, 76, 105, 
-	101, 71, 127, 
-	106, 75, 156, 
-	101, 70, 179, 
-	105, 73, 210, 
-	136, 83, 35, 
-	132, 78, 56, 
-	136, 82, 85, 
-	131, 76, 107, 
-	135, 79, 138, 
-	131, 75, 159, 
-	127, 70, 180, 
-	131, 73, 210, 
-	162, 83, 36, 
-	157, 78, 59, 
-	161, 82, 87, 
-	157, 77, 110, 
-	161, 80, 138, 
-	157, 75, 161, 
-	161, 79, 189, 
-	157, 73, 212, 
-	188, 83, 38, 
-	192, 86, 69, 
-	188, 81, 89, 
-	193, 84, 118, 
-	188, 79, 141, 
-	192, 82, 172, 
-	188, 78, 192, 
-	192, 81, 221, 
-	227, 89, 47, 
-	222, 84, 70, 
-	226, 87, 101, 
-	222, 82, 122, 
-	218, 77, 144, 
-	222, 80, 173, 
-	218, 75, 195, 
-	222, 79, 224, 
-	25, 105, 20, 
-	20, 100, 42, 
-	24, 104, 71, 
-	20, 99, 93, 
-	24, 102, 122, 
-	20, 97, 145, 
-	24, 100, 176, 
-	18, 94, 203, 
-	50, 106, 22, 
-	54, 109, 51, 
-	50, 104, 73, 
-	54, 107, 104, 
-	50, 102, 125, 
-	54, 106, 154, 
-	50, 101, 176, 
-	53, 103, 210, 
-	76, 105, 25, 
-	80, 109, 53, 
-	76, 104, 75, 
-	80, 107, 104, 
-	76, 102, 126, 
-	80, 106, 155, 
-	76, 101, 178, 
-	79, 104, 209, 
-	111, 113, 35, 
-	107, 108, 55, 
-	112, 112, 84, 
+	70, 71, 101, 
+	75, 76, 135, 
+	71, 73, 162, 
+	75, 78, 197, 
+	72, 74, 223, 
+	101, 71, 17, 
+	106, 76, 52, 
+	102, 73, 78, 
+	106, 78, 113, 
+	103, 75, 139, 
+	107, 80, 174, 
+	103, 77, 201, 
+	108, 82, 236, 
+	138, 78, 29, 
+	134, 75, 56, 
+	138, 80, 90, 
+	134, 77, 117, 
+	139, 82, 152, 
+	135, 79, 178, 
+	131, 75, 205, 
+	136, 80, 240, 
+	166, 77, 33, 
+	162, 74, 60, 
+	166, 79, 95, 
+	162, 76, 121, 
+	167, 81, 156, 
+	163, 78, 182, 
+	168, 83, 217, 
+	164, 79, 244, 
+	194, 76, 37, 
+	198, 81, 72, 
+	194, 78, 99, 
+	199, 83, 133, 
+	195, 80, 160, 
+	199, 85, 195, 
+	196, 82, 221, 
+	200, 87, 255, 
+	230, 84, 50, 
+	226, 80, 76, 
+	230, 85, 111, 
+	227, 82, 137, 
+	223, 79, 164, 
+	227, 84, 199, 
+	224, 81, 225, 
+	228, 86, 255, 
+	18, 103, 0, 
+	14, 100, 25, 
+	18, 105, 60, 
+	15, 102, 86, 
+	19, 107, 121, 
+	15, 104, 148, 
+	20, 109, 183, 
+	16, 105, 209, 
+	46, 102, 3, 
+	50, 107, 37, 
+	46, 104, 64, 
+	51, 109, 99, 
+	47, 106, 125, 
+	52, 111, 160, 
+	48, 108, 187, 
+	52, 113, 221, 
+	74, 101, 7, 
+	78, 106, 42, 
+	74, 103, 68, 
+	79, 108, 103, 
+	75, 105, 129, 
+	80, 110, 164, 
+	76, 107, 191, 
+	80, 112, 226, 
+	110, 108, 19, 
+	106, 105, 46, 
+	111, 110, 80, 
 	107, 107, 107, 
-	111, 110, 137, 
-	107, 105, 158, 
-	111, 108, 187, 
-	107, 103, 209, 
-	139, 112, 36, 
-	143, 115, 67, 
-	139, 111, 87, 
-	143, 114, 118, 
-	139, 109, 138, 
-	143, 112, 168, 
-	139, 108, 189, 
-	142, 111, 220, 
-	165, 112, 38, 
-	169, 116, 68, 
-	165, 111, 89, 
-	169, 114, 118, 
-	164, 109, 140, 
-	168, 112, 171, 
-	164, 108, 192, 
-	168, 111, 221, 
-	199, 121, 46, 
-	195, 116, 69, 
-	198, 119, 100, 
-	194, 114, 120, 
-	198, 117, 151, 
-	194, 113, 171, 
-	198, 116, 202, 
-	194, 111, 222, 
-	226, 121, 45, 
-	230, 124, 79, 
-	225, 118, 102, 
-	230, 122, 130, 
-	226, 117, 151, 
-	229, 120, 182, 
-	225, 115, 204, 
-	229, 119, 233, 
-	27, 135, 21, 
-	31, 139, 50, 
-	26, 134, 73, 
-	30, 137, 103, 
-	26, 132, 124, 
-	30, 136, 153, 
-	26, 130, 175, 
-	29, 133, 209, 
-	62, 143, 32, 
-	58, 138, 53, 
-	61, 141, 83, 
-	57, 137, 104, 
-	61, 140, 134, 
-	57, 135, 155, 
-	61, 138, 186, 
-	57, 133, 209, 
-	87, 143, 34, 
-	92, 147, 63, 
-	87, 142, 84, 
-	91, 145, 114, 
-	87, 140, 137, 
-	91, 143, 166, 
-	87, 139, 186, 
-	91, 142, 217, 
-	113, 143, 35, 
-	117, 146, 66, 
-	113, 142, 86, 
-	117, 145, 117, 
-	113, 140, 137, 
-	117, 143, 167, 
-	113, 139, 188, 
-	117, 142, 219, 
-	149, 151, 45, 
-	144, 146, 67, 
-	149, 149, 96, 
-	145, 144, 117, 
-	149, 147, 148, 
-	144, 142, 170, 
-	148, 146, 199, 
-	144, 141, 220, 
-	176, 150, 45, 
-	180, 153, 77, 
-	176, 148, 99, 
-	180, 152, 128, 
-	176, 147, 150, 
-	180, 150, 179, 
-	176, 145, 201, 
-	180, 149, 230, 
-	203, 151, 45, 
-	206, 153, 79, 
-	202, 148, 101, 
-	206, 152, 130, 
-	202, 147, 151, 
-	206, 150, 181, 
-	201, 145, 204, 
-	206, 148, 233, 
-	237, 160, 51, 
-	232, 154, 78, 
-	236, 157, 110, 
-	231, 152, 133, 
-	236, 155, 161, 
-	231, 150, 184, 
-	236, 154, 212, 
-	231, 149, 234, 
-	34, 175, 31, 
-	38, 179, 60, 
-	34, 174, 82, 
-	38, 177, 111, 
-	34, 172, 133, 
-	38, 176, 162, 
-	34, 170, 184, 
-	29, 165, 208, 
-	64, 173, 33, 
-	68, 176, 62, 
-	64, 172, 83, 
-	68, 175, 114, 
-	63, 170, 136, 
-	67, 173, 165, 
-	63, 168, 186, 
-	67, 171, 216, 
-	99, 181, 42, 
-	95, 175, 65, 
-	99, 179, 94, 
-	94, 174, 116, 
-	99, 177, 145, 
-	94, 172, 167, 
-	99, 176, 196, 
-	94, 171, 219, 
-	125, 181, 45, 
-	129, 184, 75, 
-	125, 179, 96, 
-	129, 183, 125, 
-	124, 178, 147, 
-	120, 173, 170, 
-	124, 176, 199, 
-	120, 171, 219, 
-	151, 181, 44, 
-	155, 184, 76, 
-	150, 179, 98, 
-	155, 183, 127, 
-	150, 178, 149, 
-	154, 181, 178, 
-	150, 176, 200, 
-	154, 180, 229, 
-	187, 189, 52, 
-	182, 183, 78, 
-	186, 187, 109, 
-	182, 182, 129, 
-	186, 185, 158, 
-	182, 180, 181, 
-	185, 183, 211, 
-	181, 179, 232, 
-	215, 189, 51, 
-	218, 191, 86, 
-	213, 186, 109, 
-	217, 189, 140, 
-	213, 184, 161, 
-	209, 179, 183, 
-	213, 183, 212, 
-	209, 178, 234, 
-	242, 191, 47, 
-	244, 192, 86, 
-	239, 186, 112, 
-	243, 189, 142, 
-	239, 185, 163, 
-	243, 188, 192, 
-	239, 183, 214, 
-	243, 186, 245, 
-	38, 218, 38, 
-	34, 213, 59, 
-	38, 216, 88, 
-	34, 211, 110, 
-	38, 214, 141, 
-	34, 210, 162, 
-	38, 213, 191, 
-	34, 208, 213, 
-	71, 213, 41, 
-	67, 208, 64, 
-	71, 211, 92, 
-	67, 206, 115, 
-	71, 210, 143, 
-	67, 205, 166, 
-	71, 208, 194, 
-	67, 203, 217, 
-	101, 211, 44, 
-	105, 214, 74, 
-	101, 209, 95, 
-	105, 213, 124, 
-	101, 207, 147, 
-	105, 211, 177, 
-	100, 206, 198, 
-	105, 209, 227, 
-	136, 219, 52, 
-	132, 213, 75, 
-	136, 216, 106, 
-	132, 212, 127, 
-	136, 215, 157, 
-	132, 210, 178, 
-	136, 213, 208, 
-	132, 209, 229, 
-	163, 219, 52, 
-	158, 214, 77, 
-	162, 217, 108, 
-	158, 212, 128, 
-	162, 216, 158, 
-	157, 210, 180, 
-	161, 213, 211, 
-	157, 209, 232, 
-	189, 220, 50, 
-	192, 222, 85, 
-	188, 217, 108, 
-	192, 220, 139, 
-	188, 215, 160, 
-	191, 219, 190, 
-	187, 214, 211, 
-	191, 217, 241, 
-	226, 229, 55, 
-	220, 222, 85, 
-	223, 224, 119, 
-	219, 219, 141, 
-	223, 223, 170, 
-	219, 218, 191, 
-	223, 221, 222, 
-	218, 216, 244, 
-	255, 230, 49, 
-	248, 222, 84, 
-	251, 224, 119, 
-	246, 219, 142, 
-	250, 222, 173, 
-	246, 217, 194, 
-	250, 220, 224, 
-	246, 216, 245, 
-	27, 255, 35, 
-	31, 255, 66, 
-	27, 255, 86, 
-	31, 255, 117, 
-	27, 254, 137, 
-	31, 255, 168, 
-	27, 252, 188, 
-	30, 255, 219, 
-	75, 255, 49, 
-	71, 250, 71, 
-	75, 254, 100, 
-	71, 249, 121, 
-	75, 252, 152, 
-	71, 247, 174, 
-	75, 251, 203, 
-	71, 246, 224, 
-	109, 251, 51, 
-	104, 246, 74, 
-	108, 249, 105, 
-	104, 244, 125, 
-	108, 247, 156, 
-	104, 243, 176, 
-	108, 246, 207, 
-	104, 241, 227, 
-	139, 249, 51, 
-	142, 252, 85, 
-	138, 247, 107, 
-	142, 250, 136, 
-	138, 245, 157, 
-	142, 248, 188, 
-	138, 243, 210, 
-	142, 247, 239, 
-	175, 255, 58, 
-	170, 251, 85, 
-	173, 254, 116, 
-	169, 249, 139, 
-	173, 253, 168, 
-	169, 248, 190, 
-	173, 251, 219, 
-	169, 246, 241, 
-	202, 255, 54, 
-	196, 252, 85, 
-	199, 255, 119, 
-	195, 250, 141, 
-	199, 253, 169, 
-	195, 248, 190, 
-	199, 251, 221, 
-	194, 246, 244, 
-	229, 255, 48, 
-	231, 255, 91, 
-	225, 255, 118, 
-	229, 255, 150, 
-	225, 253, 172, 
-	229, 255, 201, 
-	224, 251, 223, 
-	229, 255, 252, 
-	255, 255, 47, 
-	255, 255, 88, 
-	255, 255, 126, 
-	255, 255, 152, 
-	255, 255, 182, 
-	255, 255, 203, 
-	255, 255, 232, 
-	255, 254, 255
+	111, 112, 142, 
+	108, 109, 168, 
+	112, 114, 203, 
+	108, 110, 230, 
+	138, 107, 23, 
+	142, 112, 58, 
+	139, 109, 84, 
+	143, 114, 119, 
+	139, 111, 146, 
+	144, 116, 181, 
+	140, 113, 207, 
+	144, 118, 242, 
+	166, 106, 27, 
+	170, 111, 62, 
+	167, 108, 89, 
+	171, 113, 123, 
+	167, 110, 150, 
+	172, 115, 185, 
+	168, 112, 211, 
+	172, 117, 246, 
+	202, 114, 40, 
+	198, 110, 66, 
+	203, 115, 101, 
+	199, 112, 127, 
+	204, 117, 162, 
+	200, 114, 189, 
+	204, 119, 224, 
+	200, 116, 250, 
+	230, 112, 44, 
+	235, 117, 78, 
+	231, 114, 105, 
+	235, 119, 140, 
+	232, 116, 166, 
+	236, 121, 201, 
+	232, 118, 228, 
+	237, 123, 255, 
+	18, 132, 0, 
+	23, 137, 27, 
+	19, 134, 54, 
+	23, 139, 89, 
+	20, 136, 115, 
+	24, 141, 150, 
+	20, 138, 177, 
+	25, 143, 211, 
+	55, 139, 5, 
+	51, 136, 31, 
+	55, 141, 66, 
+	51, 138, 93, 
+	56, 143, 128, 
+	52, 140, 154, 
+	57, 145, 189, 
+	53, 141, 215, 
+	83, 138, 9, 
+	87, 143, 44, 
+	83, 140, 70, 
+	88, 145, 105, 
+	84, 142, 132, 
+	88, 147, 166, 
+	85, 144, 193, 
+	89, 149, 228, 
+	111, 137, 13, 
+	115, 142, 48, 
+	111, 139, 74, 
+	116, 144, 109, 
+	112, 141, 136, 
+	116, 146, 171, 
+	113, 143, 197, 
+	117, 148, 232, 
+	147, 145, 25, 
+	143, 141, 52, 
+	147, 146, 87, 
+	144, 143, 113, 
+	148, 148, 148, 
+	144, 145, 175, 
+	149, 150, 209, 
+	145, 147, 236, 
+	175, 143, 29, 
+	179, 148, 64, 
+	175, 145, 91, 
+	180, 150, 126, 
+	176, 147, 152, 
+	181, 152, 187, 
+	177, 149, 213, 
+	181, 154, 248, 
+	203, 142, 34, 
+	207, 147, 68, 
+	203, 144, 95, 
+	208, 149, 130, 
+	204, 146, 156, 
+	209, 151, 191, 
+	205, 148, 218, 
+	209, 153, 252, 
+	239, 150, 46, 
+	235, 146, 72, 
+	240, 151, 107, 
+	236, 148, 134, 
+	240, 153, 169, 
+	237, 150, 195, 
+	241, 155, 230, 
+	237, 152, 255, 
+	27, 169, 0, 
+	31, 174, 30, 
+	28, 171, 56, 
+	32, 176, 91, 
+	28, 173, 118, 
+	33, 178, 152, 
+	29, 175, 179, 
+	25, 171, 205, 
+	55, 168, 0, 
+	59, 173, 34, 
+	56, 170, 60, 
+	60, 175, 95, 
+	56, 172, 122, 
+	61, 177, 156, 
+	57, 174, 183, 
+	61, 179, 218, 
+	91, 176, 11, 
+	87, 172, 38, 
+	92, 177, 73, 
+	88, 174, 99, 
+	93, 179, 134, 
+	89, 176, 160, 
+	93, 181, 195, 
+	89, 178, 222, 
+	119, 175, 15, 
+	124, 180, 50, 
+	120, 176, 77, 
+	124, 181, 111, 
+	121, 178, 138, 
+	117, 175, 165, 
+	121, 180, 199, 
+	117, 177, 226, 
+	147, 173, 19, 
+	152, 178, 54, 
+	148, 175, 81, 
+	152, 180, 116, 
+	149, 177, 142, 
+	153, 182, 177, 
+	149, 179, 203, 
+	154, 184, 238, 
+	183, 181, 32, 
+	180, 177, 58, 
+	184, 182, 93, 
+	180, 179, 120, 
+	185, 184, 154, 
+	181, 181, 181, 
+	185, 186, 216, 
+	182, 183, 242, 
+	211, 180, 36, 
+	216, 185, 71, 
+	212, 181, 97, 
+	217, 186, 132, 
+	213, 183, 158, 
+	209, 180, 185, 
+	213, 185, 220, 
+	210, 182, 246, 
+	239, 179, 40, 
+	244, 184, 75, 
+	240, 180, 101, 
+	245, 185, 136, 
+	241, 182, 163, 
+	245, 187, 197, 
+	241, 184, 224, 
+	246, 189, 255, 
+	36, 207, 0, 
+	32, 203, 24, 
+	36, 208, 58, 
+	33, 205, 85, 
+	37, 210, 120, 
+	33, 207, 146, 
+	38, 212, 181, 
+	34, 209, 208, 
+	64, 206, 1, 
+	60, 202, 28, 
+	64, 207, 63, 
+	61, 204, 89, 
+	65, 209, 124, 
+	61, 206, 150, 
+	66, 211, 185, 
+	62, 208, 212, 
+	92, 205, 5, 
+	96, 210, 40, 
+	92, 206, 67, 
+	97, 211, 101, 
+	93, 208, 128, 
+	97, 213, 163, 
+	94, 210, 189, 
+	98, 215, 224, 
+	128, 212, 18, 
+	124, 208, 44, 
+	129, 213, 79, 
+	125, 210, 105, 
+	129, 215, 140, 
+	125, 212, 167, 
+	130, 217, 202, 
+	126, 214, 228, 
+	156, 211, 22, 
+	152, 207, 48, 
+	157, 212, 83, 
+	153, 209, 110, 
+	157, 214, 144, 
+	153, 211, 171, 
+	158, 216, 206, 
+	154, 213, 232, 
+	184, 210, 26, 
+	188, 215, 61, 
+	185, 211, 87, 
+	189, 216, 122, 
+	185, 213, 148, 
+	190, 218, 183, 
+	186, 215, 210, 
+	190, 220, 245, 
+	220, 217, 38, 
+	216, 214, 65, 
+	221, 219, 99, 
+	217, 215, 126, 
+	221, 220, 161, 
+	218, 217, 187, 
+	222, 222, 222, 
+	218, 219, 249, 
+	248, 216, 42, 
+	244, 213, 69, 
+	249, 218, 103, 
+	245, 214, 130, 
+	249, 219, 165, 
+	246, 216, 191, 
+	250, 221, 226, 
+	246, 218, 253, 
+	36, 236, 0, 
+	41, 241, 26, 
+	37, 237, 52, 
+	41, 242, 87, 
+	37, 239, 114, 
+	42, 244, 149, 
+	38, 241, 175, 
+	43, 246, 210, 
+	72, 243, 3, 
+	69, 240, 30, 
+	73, 245, 65, 
+	69, 241, 91, 
+	74, 246, 126, 
+	70, 243, 153, 
+	74, 248, 187, 
+	71, 245, 214, 
+	100, 242, 8, 
+	97, 238, 34, 
+	101, 243, 69, 
+	97, 240, 95, 
+	102, 245, 130, 
+	98, 242, 157, 
+	102, 247, 192, 
+	99, 244, 218, 
+	128, 241, 12, 
+	133, 246, 46, 
+	129, 242, 73, 
+	133, 247, 108, 
+	130, 244, 134, 
+	134, 249, 169, 
+	130, 246, 196, 
+	135, 251, 230, 
+	165, 248, 24, 
+	161, 245, 50, 
+	165, 250, 85, 
+	161, 246, 112, 
+	166, 251, 147, 
+	162, 248, 173, 
+	167, 253, 208, 
+	163, 250, 235, 
+	193, 247, 28, 
+	189, 244, 55, 
+	193, 249, 89, 
+	189, 245, 116, 
+	194, 250, 151, 
+	190, 247, 177, 
+	195, 252, 212, 
+	191, 249, 239, 
+	221, 246, 32, 
+	225, 251, 67, 
+	221, 248, 93, 
+	226, 253, 128, 
+	222, 249, 155, 
+	226, 254, 190, 
+	223, 251, 216, 
+	227, 255, 251, 
+	255, 253, 44, 
+	253, 250, 71, 
+	255, 255, 106, 
+	254, 251, 132, 
+	255, 255, 167, 
+	254, 253, 194, 
+	255, 255, 228, 
+	255, 255, 255
 };
 
-static bool ReadM3U(std::vector<std::string> &file_list, std::string path, unsigned depth = 0)
-{
-   std::string dir_path;
-   char linebuf[2048];
-   FILE *fp = fopen(path.c_str(), "rb");
+static int curindent  = 0;
+static uint8 lastchar = 0;
 
-   if (!fp)
-      return false;
-
-   MDFN_GetFilePathComponents(path, &dir_path);
-
-   while(fgets(linebuf, sizeof(linebuf), fp))
-   {
-      std::string efp;
-
-      if(linebuf[0] == '#')
-         continue;
-      string_trim_whitespace_right(linebuf);
-      if(linebuf[0] == 0)
-         continue;
-
-      efp = MDFN_EvalFIP(dir_path, std::string(linebuf));
-
-      if(efp.size() >= 4 && efp.substr(efp.size() - 4) == ".m3u")
-      {
-         if(efp == path)
-         {
-            log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp.c_str());
-            fclose(fp);
-            return false;
-         }
-
-         if(depth == 99)
-         {
-            log_cb(RETRO_LOG_ERROR, "M3U load recursion too deep!\n");
-            fclose(fp);
-            return false;
-         }
-
-         ReadM3U(file_list, efp, depth++);
-      }
-      else
-         file_list.push_back(efp);
-   }
-
-   fclose(fp);
-
-   return true;
-}
-
-static std::vector<CDIF *> CDInterfaces;   // FIXME: Cleanup on error out.
-// TODO: LoadCommon()
-
-static MDFNGI *MDFNI_LoadCD(const char *devicename)
-{
-   bool ret = false;
-   log_cb(RETRO_LOG_INFO, "Loading %s...\n\n", devicename);
-
-   if(devicename && strlen(devicename) > 4 && !strcasecmp(devicename + strlen(devicename) - 4, ".m3u"))
-   {
-      std::vector<std::string> file_list;
-
-      if (ReadM3U(file_list, devicename))
-         ret = true;
-
-      for(unsigned i = 0; i < file_list.size(); i++)
-      {
-         CDIF *cdif = CDIF_Open(file_list[i].c_str(), false);
-         CDInterfaces.push_back(cdif);
-      }
-   }
-   else
-   {
-      CDIF *cdif = CDIF_Open(devicename, false);
-
-      if (cdif)
-      {
-         ret = true;
-         CDInterfaces.push_back(cdif);
-      }
-   }
-
-   if (!ret)
-   {
-      log_cb(RETRO_LOG_ERROR, "Error opening CD.\n");
-      return NULL;
-   }
-
-   /* Print out a track list for all discs. */
-   MDFN_indent(1);
-   for(unsigned i = 0; i < CDInterfaces.size(); i++)
-   {
-      TOC toc;
-
-      CDInterfaces[i]->ReadTOC(&toc);
-
-      MDFN_printf("CD %d Layout:\n", i + 1);
-      MDFN_indent(1);
-
-      for(int32 track = toc.first_track; track <= toc.last_track; track++)
-      {
-         MDFN_printf("Track %2d, LBA: %6d  %s\n", track, toc.tracks[track].lba, (toc.tracks[track].control & 0x4) ? "DATA" : "AUDIO");
-      }
-
-      MDFN_printf("Leadout: %6d\n", toc.tracks[100].lba);
-      MDFN_indent(-1);
-      MDFN_printf("\n");
-   }
-   MDFN_indent(-1);
-
-   MDFN_printf("Using module: pce.\n");
-
-   if(!(PCE_LoadCD(&CDInterfaces)))
-   {
-      for(unsigned i = 0; i < CDInterfaces.size(); i++)
-         delete CDInterfaces[i];
-
-      CDInterfaces.clear();
-
-      MDFNGameInfo = NULL;
-      return(0);
-   }
-
-   //MDFNI_SetLayerEnableMask(~0ULL);
-
-   MDFN_LoadGameCheats(NULL);
-   MDFNMP_InstallReadPatches();
-
-   return(MDFNGameInfo);
-}
-
-static MDFNGI *MDFNI_LoadGame(const char *name)
-{
-   static const FileExtensionSpecStruct KnownExtensions[] =
-   {
-      { ".pce", "PC Engine ROM Image" },
-      { ".sgx", "SuperGrafx ROM Image" },
-      { NULL, NULL }
-   };
-
-   std::vector<FileExtensionSpecStruct> valid_iae;
-   MDFNFILE *GameFile = NULL;
-   MDFNGameInfo = &EmulatedPCE;
-
-   if(strlen(name) > 4 && (!strcasecmp(name + strlen(name) - 4, ".cue") || !strcasecmp(name + strlen(name) - 4, ".ccd") || !strcasecmp(name + strlen(name) - 4, ".chd") || !strcasecmp(name + strlen(name) - 4, ".toc") || !strcasecmp(name + strlen(name) - 4, ".m3u")))
-   {
-      return(MDFNI_LoadCD(name));
-   }
-
-   MDFN_printf("Loading %s...\n",name);
-
-   MDFN_indent(1);
-
-   // Construct a NULL-delimited list of known file extensions for MDFN_fopen()
-   const FileExtensionSpecStruct *curexts = KnownExtensions;
-
-   while(curexts->extension && curexts->description)
-   {
-      valid_iae.push_back(*curexts);
-      curexts++;
-   }
-
-   GameFile = file_open(name);
-
-   if(!GameFile)
-      goto error;
-
-   MDFN_printf("Using module: pce.\n\n");
-   MDFN_indent(1);
-
-   //
-   // Load per-game settings
-   //
-   // Maybe we should make a "pgcfg" subdir, and automatically load all files in it?
-   // End load per-game settings
-   //
-
-   if(PCE_Load(GameFile) <= 0)
-      goto error;
-
-   MDFN_LoadGameCheats(NULL);
-   MDFNMP_InstallReadPatches();
-
-   MDFN_indent(-2);
-
-   return(MDFNGameInfo);
-
-error:
-   if (GameFile)
-      file_close(GameFile);
-   MDFNGameInfo = NULL;
-   return NULL;
-}
-
-static int curindent = 0;
-
-void MDFN_indent(int indent)
+static void MDFN_indent(int indent)
 {
    curindent += indent;
 }
 
-static uint8 lastchar = 0;
-
-void MDFN_printf(const char *format, ...)
+#ifdef DEBUG
+static void MDFN_printf(const char *format, ...)
 {
-   char *format_temp;
-   char *temp;
-   unsigned int x, newlen;
-
    va_list ap;
-   va_start(ap,format);
-
-
+   char *temp;
+   char *format_temp;
+   unsigned int x, newlen;
+   size_t len            = strlen(format);
    // First, determine how large our format_temp buffer needs to be.
    uint8 lastchar_backup = lastchar; // Save lastchar!
-   for(newlen=x=0;x<strlen(format);x++)
+
+   va_start(ap,format);
+
+   for(newlen=x=0;x < len;x++)
    {
       if(lastchar == '\n' && format[x] != '\n')
       {
@@ -795,11 +600,12 @@ void MDFN_printf(const char *format, ...)
       lastchar = format[x];
    }
 
-   format_temp = (char *)malloc(newlen + 1); // Length + NULL character, duh
-
+   // Length + NULL character, duh
+   format_temp = (char *)malloc(newlen + 1);
    // Now, construct our format_temp string
-   lastchar = lastchar_backup; // Restore lastchar
-   for(newlen=x=0;x<strlen(format);x++)
+   lastchar    = lastchar_backup; // Restore lastchar
+
+   for(newlen=x=0;x < len;x++)
    {
       if(lastchar == '\n' && format[x] != '\n')
       {
@@ -817,61 +623,218 @@ void MDFN_printf(const char *format, ...)
    vsnprintf(temp, 4096, format_temp, ap);
    free(format_temp);
 
-   MDFND_Message(temp);
+   if (log_cb)
+      log_cb(RETRO_LOG_INFO, "%s\n", temp);
    free(temp);
 
    va_end(ap);
 }
+#endif
 
-void MDFN_PrintError(const char *format, ...)
+static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsigned depth = 0)
 {
-   char *temp;
+   std::string dir_path;
+   char linebuf[2048];
+   RFILE *fp = filestream_open(path.c_str(), RETRO_VFS_FILE_ACCESS_READ,
+         RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
-   va_list ap;
+   if (!fp)
+      return;
 
-   va_start(ap, format);
+   MDFN_GetFilePathComponents(path, &dir_path);
 
-   temp = (char*)malloc(4096 * sizeof(char));
-   vsnprintf(temp, 4096, format, ap);
-   MDFND_PrintError(temp);
-   free(temp);
+   while(filestream_gets(fp, linebuf, sizeof(linebuf)) != NULL)
+   {
+      std::string efp;
 
-   va_end(ap);
+      if(linebuf[0] == '#')
+         continue;
+      string_trim_whitespace_right(linebuf);
+      if(linebuf[0] == 0)
+         continue;
+
+      efp = MDFN_EvalFIP(dir_path, std::string(linebuf));
+
+      if(efp.size() >= 4 && efp.substr(efp.size() - 4) == ".m3u")
+      {
+         if(efp == path)
+         {
+            log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp.c_str());
+            goto end;
+         }
+
+         if(depth == 99)
+         {
+            log_cb(RETRO_LOG_ERROR, "M3U load recursion too deep!\n");
+            goto end;
+         }
+
+         ReadM3U(file_list, efp, depth++);
+      }
+      else
+         file_list.push_back(efp);
+   }
+
+end:
+   filestream_close(fp);
 }
 
-void MDFN_DebugPrintReal(const char *file, const int line, const char *format, ...)
+static std::vector<CDIF *> CDInterfaces;   // FIXME: Cleanup on error out.
+// TODO: LoadCommon()
+
+static bool MDFNI_LoadCD(const char *path, const char *ext)
 {
-   char *temp;
+   bool ret = false;
 
-   va_list ap;
+   if (!path || !ext)
+   {
+      log_cb(RETRO_LOG_ERROR, "Error opening CD - invalid path\n");
+      return false;
+   }
 
-   va_start(ap, format);
+   if (!strcasecmp(ext, "m3u"))
+   {
+      std::vector<std::string> file_list;
 
-   temp = (char*)malloc(4096 * sizeof(char));
-   vsnprintf(temp, 4096, format, ap);
-   fprintf(stderr, "%s:%d  %s\n", file, line, temp);
-   free(temp);
+      ReadM3U(file_list, path);
 
-   va_end(ap);
+      for(unsigned i = 0; i < file_list.size(); i++)
+      {
+         CDIF *cdif = CDIF_Open(file_list[i].c_str(), cdimagecache);
+         CDInterfaces.push_back(cdif);
+      }
+   }
+   else
+   {
+      CDIF *cdif = CDIF_Open(path, cdimagecache);
+
+      if (cdif)
+      {
+         ret = true;
+         CDInterfaces.push_back(cdif);
+      }
+   }
+
+   if (!ret)
+   {
+      log_cb(RETRO_LOG_ERROR, "Error opening CD.\n");
+      return false;
+   }
+
+#ifdef DEBUG
+   /* Print out a track list for all discs. */
+   MDFN_indent(1);
+   for(unsigned i = 0; i < CDInterfaces.size(); i++)
+   {
+      TOC toc;
+
+      CDInterfaces[i]->ReadTOC(&toc);
+
+      MDFN_printf("CD %d Layout:", i + 1);
+      MDFN_indent(1);
+
+      for(int32 track = toc.first_track; track <= toc.last_track; track++)
+      {
+         MDFN_printf("Track %2d, LBA: %6d  %s", track, toc.tracks[track].lba, (toc.tracks[track].control & 0x4) ? "DATA" : "AUDIO");
+      }
+
+      MDFN_printf("Leadout: %6d", toc.tracks[100].lba);
+      MDFN_indent(-1);
+   }
+#endif
+
+   if(!(PCE_LoadCD(&CDInterfaces)))
+   {
+      for(unsigned i = 0; i < CDInterfaces.size(); i++)
+         delete CDInterfaces[i];
+
+      CDInterfaces.clear();
+
+      return false;
+   }
+
+   MDFN_LoadGameCheats(NULL);
+   MDFNMP_InstallReadPatches();
+
+   return true;
 }
 
+static bool MDFNI_LoadGame(const char *path, const char *ext,
+      const uint8_t *data, size_t size)
+{
+   MDFNFILE *GameFile          = NULL;
+   const uint8_t *content_data = NULL;
+   size_t content_size         = 0;
 
-static MDFNGI *game;
+   if(ext &&
+      (!strcasecmp(ext, "cue") ||
+       !strcasecmp(ext, "ccd") ||
+       !strcasecmp(ext, "chd") ||
+       !strcasecmp(ext, "toc") ||
+       !strcasecmp(ext, "m3u")))
+      return MDFNI_LoadCD(path, ext);
+
+   /* Check whether we already have a valid
+    * data buffer */
+   if (data)
+   {
+      content_data = data;
+      content_size = size;
+   }
+   else
+   {
+      if (!path)
+      {
+         log_cb(RETRO_LOG_ERROR, "Error loading content - invalid path\n");
+         goto error;
+      }
+
+      /* Load content from file */
+      GameFile = file_open(path);
+
+      if(!GameFile)
+         goto error;
+
+      content_data = GameFile->data;
+      content_size = GameFile->size;
+   }
+
+   if(PCE_Load(content_data, content_size, ext) <= 0)
+      goto error;
+
+   MDFN_LoadGameCheats(NULL);
+   MDFNMP_InstallReadPatches();
+
+   if (GameFile)
+      file_close(GameFile);
+
+   return true;
+
+error:
+   if (GameFile)
+      file_close(GameFile);
+
+   return false;
+}
 
 struct retro_perf_callback perf_cb;
 retro_get_cpu_features_t perf_get_cpu_features_cb = NULL;
 retro_log_printf_t log_cb;
+static retro_set_led_state_t led_state_cb = NULL;
 static retro_video_refresh_t video_cb;
 static retro_audio_sample_t audio_cb;
 static retro_audio_sample_batch_t audio_batch_cb;
 static retro_environment_t environ_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
-static double last_sound_rate;
+static double last_sound_rate = 0.0;
 
-static MDFN_Surface *surf;
+static bool libretro_supports_option_categories = false;
+static bool libretro_supports_bitmasks = false;
 
-static bool failed_init;
+static MDFN_Surface *surf = NULL;
+
+static bool failed_init = false;
 
 std::string retro_base_directory;
 
@@ -881,23 +844,54 @@ static void check_system_specs(void)
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 }
 
+/* LED interface */
+enum
+{
+   RETRO_LED_POWER = 0,
+   RETRO_LED_CD,
+   RETRO_LED_NUM
+};
+
+unsigned int pce_led_state[RETRO_LED_NUM] = {0};
+static unsigned int retro_led_state[RETRO_LED_NUM] = {0};
+static void retro_led_interface(void)
+{
+   /* 0: Power
+    * 1: CD */
+
+   unsigned int led_state[RETRO_LED_NUM] = {0};
+   unsigned int l                        = 0;
+
+   led_state[RETRO_LED_POWER] = pce_led_state[RETRO_LED_POWER];
+   led_state[RETRO_LED_CD]    = pce_led_state[RETRO_LED_CD];
+
+   for (l = 0; l < RETRO_LED_NUM; l++)
+   {
+      if (retro_led_state[l] != led_state[l])
+      {
+         retro_led_state[l] = led_state[l];
+         led_state_cb(l, led_state[l]);
+      }
+   }
+}
+
 void retro_init(void)
 {
    struct retro_log_callback log;
+   const char *dir = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
       log_cb = log.log;
-   else 
+   else
       log_cb = NULL;
 
    CDUtility_Init();
 
-   const char *dir = NULL;
-
    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir)
    {
+      size_t last;
       retro_base_directory = dir;
       // Make sure that we don't have any lingering slashes, etc, as they break Windows.
-      size_t last = retro_base_directory.find_last_not_of("/\\");
+      last = retro_base_directory.find_last_not_of("/\\");
       if (last != std::string::npos)
          last++;
 
@@ -910,11 +904,11 @@ void retro_init(void)
          log_cb(RETRO_LOG_WARN, "System directory is not defined. Fallback on using same dir as ROM for system directory later ...\n");
       failed_init = true;
    }
-   
+
 #if defined(WANT_16BPP) && defined(FRONTEND_SUPPORTS_RGB565)
    enum retro_pixel_format rgb565 = RETRO_PIXEL_FORMAT_RGB565;
    if (environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb565) && log_cb)
-      log_cb(RETRO_LOG_INFO, "Frontend supports RGB565 - will use that instead of XRGB1555.\n");
+      log_cb(RETRO_LOG_DEBUG, "Frontend supports RGB565 - will use that instead of XRGB1555.\n");
 #elif defined(WANT_32BPP)
    enum retro_pixel_format rgb888 = RETRO_PIXEL_FORMAT_XRGB8888;
    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb888))
@@ -932,11 +926,15 @@ void retro_init(void)
 
    bool yes = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &yes);
-   
+
    setting_pce_initial_scanline = 0;
    setting_pce_last_scanline = 242;
 
    check_system_specs();
+
+   libretro_supports_bitmasks = false;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
+      libretro_supports_bitmasks = true;
 }
 
 void retro_reset(void)
@@ -972,52 +970,135 @@ static int Turbo_Toggling = 1;
 static bool turbo_toggle_alt = false;
 static int turbo_toggle_down[MAX_PLAYERS][MAX_BUTTONS] = {};
 
+static bool update_option_visibility(void)
+{
+   struct retro_variable var = {0};
+   bool updated = false;
+
+   if (libretro_supports_option_categories)
+      return false;
+
+   /* decide if input/turbo settings should be shown */
+   var.key = "pce_show_advanced_input_settings";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      bool show_advanced_input_settings_prev = show_advanced_input_settings;
+
+      show_advanced_input_settings = (strcmp(var.value, "enabled") == 0);
+
+      if (show_advanced_input_settings != show_advanced_input_settings_prev)
+      {
+         struct retro_core_option_display option_display;
+         size_t i;
+         const char av_keys[22][32] = {
+            "pce_multitap",
+            "pce_mouse_sensitivity",
+            "pce_disable_softreset",
+            "pce_up_down_allowed",
+            "pce_Turbo_Delay",
+            "pce_Turbo_Toggling",
+            "pce_turbo_toggle_hotkey",
+            "pce_p0_turbo_I_enable",
+            "pce_p0_turbo_II_enable",
+            "pce_p1_turbo_I_enable",
+            "pce_p1_turbo_II_enable",
+            "pce_p2_turbo_I_enable",
+            "pce_p2_turbo_II_enable",
+            "pce_p3_turbo_I_enable",
+            "pce_p3_turbo_II_enable",
+            "pce_p4_turbo_I_enable",
+            "pce_p4_turbo_II_enable",
+            "pce_default_joypad_type_p1",
+            "pce_default_joypad_type_p2",
+            "pce_default_joypad_type_p3",
+            "pce_default_joypad_type_p4",
+            "pce_default_joypad_type_p5",
+         };
+
+         option_display.visible = show_advanced_input_settings;
+
+         for (i = 0; i < 22; i++)
+         {
+            option_display.key = av_keys[i];
+            environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+         }
+
+         updated = true;
+      }
+   }
+
+   return updated;
+}
+
 static void check_variables(bool loaded)
 {
    struct retro_variable var = {0};
 
-   var.key = "pce_cdimagecache";
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   if (!loaded)
    {
-      bool cdimage_cache = true;
+      var.key      = "pce_cdimagecache";
+      cdimagecache = false;
 
-      if (strcmp(var.value, "enabled") == 0)
-         cdimage_cache = true;
-      else if (strcmp(var.value, "disabled") == 0)
-         cdimage_cache = false;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+         if (strcmp(var.value, "enabled") == 0)
+            cdimagecache = true;
 
-      if (cdimage_cache != old_cdimagecache)
-         old_cdimagecache = cdimage_cache;
-   }
+      var.key = "pce_cdbios";
 
-   var.key = "pce_cdbios";
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         if (strcmp(var.value, "System Card 3") == 0)
+            setting_pce_cdbios = "syscard3.pce";
+         else if (strcmp(var.value, "System Card 2") == 0)
+            setting_pce_cdbios = "syscard2.pce";
+         else if (strcmp(var.value, "System Card 1") == 0)
+            setting_pce_cdbios = "syscard1.pce";
+         else if (strcmp(var.value, "Games Express") == 0)
+            setting_pce_cdbios = "gexpress.pce";
+         else if (strcmp(var.value, "System Card 3 US") == 0)
+            setting_pce_cdbios = "syscard3u.pce";
+         else if (strcmp(var.value, "System Card 2 US") == 0)
+            setting_pce_cdbios = "syscard2u.pce";
+      }
 
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (strcmp(var.value, "System Card 3") == 0)
-         setting_pce_cdbios = "syscard3.pce";
-      else if (strcmp(var.value, "System Card 2") == 0)
-         setting_pce_cdbios = "syscard2.pce";
-      else if (strcmp(var.value, "System Card 1") == 0)
-         setting_pce_cdbios = "syscard1.pce";
-      else if (strcmp(var.value, "Games Express") == 0)
-         setting_pce_cdbios = "gexpress.pce";
-      else if (strcmp(var.value, "System Card 3 US") == 0)
-         setting_pce_cdbios = "syscard3u.pce";
-      else if (strcmp(var.value, "System Card 2 US") == 0)
-         setting_pce_cdbios = "syscard2u.pce";
-   }
+      var.key = "pce_arcadecard";
 
-   var.key = "pce_arcadecard";
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         setting_pce_arcadecard = (strcmp(var.value, "enabled") == 0);
+      }
 
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      setting_pce_arcadecard = (strcmp(var.value, "enabled") == 0);
+      var.key = "pce_psgrevision";
+
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         if (strcmp(var.value, "auto") == 0)
+            setting_pce_psgrevision = 2;
+         else if (strcmp(var.value, "HuC6280") == 0)
+            setting_pce_psgrevision = 0;
+         else if (strcmp(var.value, "HuC6280A") == 0)
+            setting_pce_psgrevision = 1;
+      }
+
+      char key[64] = {0};
+
+      var.key = key;
+      for (int i = 0; i < MAX_PLAYERS; i++)
+      {
+         snprintf(key, sizeof(key), "pce_default_joypad_type_p%d", i + 1);
+         if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+         {
+            if (strcmp(var.value, "2 Buttons") == 0)
+               avpad6_enable[i] = 0;
+            else if (strcmp(var.value, "6 Buttons") == 0)
+               avpad6_enable[i] = (1 << RETRO_DEVICE_ID_JOYPAD_L2);
+         }
+      }
    }
 
    var.key = "pce_nospritelimit";
-   
+
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       setting_pce_nospritelimit = (strcmp(var.value, "enabled") == 0);
@@ -1085,18 +1166,6 @@ static void check_variables(bool loaded)
       setting_pce_last_scanline = atoi(var.value);
    }
 
-   var.key = "pce_psgrevision";
-   
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (strcmp(var.value, "auto") == 0)
-         setting_pce_psgrevision = 2;
-      else if (strcmp(var.value, "HuC6280") == 0)
-         setting_pce_psgrevision = 0;
-      else if (strcmp(var.value, "HuC6280A") == 0)
-         setting_pce_psgrevision = 1;
-   }
-
    var.key = "pce_cddavolume";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -1126,30 +1195,30 @@ static void check_variables(bool loaded)
    }
 
    var.key = "pce_adpcmextraprec";
-   
+
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       setting_pce_adpcmextraprec = (strcmp(var.value, "12-bit") == 0);
    }
 
    var.key = "pce_resamp_quality";
-   
+
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       setting_pce_resamp_quality = atoi(var.value);
 
       last_sound_rate = 0;
    }
-   
+
    var.key = "pce_multitap";
-   
+
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       setting_pce_multitap = (strcmp(var.value, "enabled") == 0);
    }
 
    var.key = "pce_scaling";
-   
+
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       if(strcmp(var.value, "auto") == 0)
@@ -1172,7 +1241,6 @@ static void check_variables(bool loaded)
       else if(strcmp(var.value, "always") == 0)
          Turbo_Toggling = 2;
 
-
       int mode = (Turbo_Toggling == 2);
       for(int lcv = 0; lcv < MAX_PLAYERS; lcv++)
       {
@@ -1181,7 +1249,7 @@ static void check_variables(bool loaded)
       }
    }
 
-   // Set TURBO_DELAY 
+   // Set TURBO_DELAY
    var.key = "pce_Turbo_Delay";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -1202,7 +1270,7 @@ static void check_variables(bool loaded)
       turbo_toggle_alt = (strcmp(var.value, "enabled") == 0);
    }
 
-   // Enable turbo for each player's I+II buttons   
+   // Enable turbo for each player's I+II buttons
    var.key = "pce_p0_turbo_I_enable";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -1272,7 +1340,7 @@ static void check_variables(bool loaded)
    {
       turbo_enable[4][1] = (strcmp(var.value, "enabled") == 0);
    }
-   
+
    var.key = "pce_mouse_sensitivity";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -1294,50 +1362,8 @@ static void check_variables(bool loaded)
       up_down_allowed = (strcmp(var.value, "enabled") == 0);
    }
 
-   var.key = "pce_show_advanced_input_settings";
-    var.value = NULL;
+   update_option_visibility();
 
-    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-    {
-        bool show_advanced_input_settings_prev = show_advanced_input_settings;
-
-        show_advanced_input_settings = true;
-        if (strcmp(var.value, "disabled") == 0)
-            show_advanced_input_settings = false;
-
-        if (show_advanced_input_settings != show_advanced_input_settings_prev)
-        {
-            size_t i;
-            struct retro_core_option_display option_display;
-            char av_keys[17][32] = {
-                "pce_multitap",
-                "pce_mouse_sensitivity",
-                "pce_disable_softreset",
-                "pce_up_down_allowed",
-                "pce_Turbo_Delay",
-                "pce_Turbo_Toggling",
-                "pce_turbo_toggle_hotkey",
-                "pce_p0_turbo_I_enable",
-                "pce_p0_turbo_II_enable",
-                "pce_p1_turbo_I_enable",
-                "pce_p1_turbo_II_enable",
-                "pce_p2_turbo_I_enable",
-                "pce_p2_turbo_II_enable",
-                "pce_p3_turbo_I_enable",
-                "pce_p3_turbo_II_enable",
-                "pce_p4_turbo_I_enable",
-                "pce_p4_turbo_II_enable",
-            };
-
-            option_display.visible = show_advanced_input_settings;
-
-            for (i = 0; i < 17; i++)
-            {
-                option_display.key = av_keys[i];
-                environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
-            }
-        }
-    }
    if (loaded)
       SettingsChanged();
 }
@@ -1368,15 +1394,57 @@ bool retro_load_game(const struct retro_game_info *info)
       { 0 },
    };
 
-   if (!info || failed_init)
+   const struct retro_game_info_ext *info_ext = NULL;
+   const uint8_t *content_data                = NULL;
+   size_t content_size                        = 0;
+   const char *content_path                   = NULL;
+   char content_ext[8];
+
+   content_ext[0] = '\0';
+
+   if (failed_init)
       return false;
+
+   /* Attempt to fetch extended game info */
+   if (environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &info_ext))
+   {
+      content_data = (const uint8_t *)info_ext->data;
+      content_size = info_ext->size;
+
+      /* Content path information is only required
+       * if we do not have a valid data buffer */
+      if (!content_data)
+      {
+         content_path = info_ext->full_path;
+
+         strncpy(content_ext, info_ext->ext, sizeof(content_ext));
+         content_ext[sizeof(content_ext) - 1] = '\0';
+      }
+   }
+   else
+   {
+      const char *ext = NULL;
+
+      if (!info || !info->path)
+         return false;
+
+      content_data = NULL;
+      content_size = 0;
+      content_path = info->path;
+
+      if ((ext = strrchr(info->path, '.')))
+      {
+         strncpy(content_ext, ext + 1, sizeof(content_ext));
+         content_ext[sizeof(content_ext) - 1] = '\0';
+      }
+   }
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
    check_variables(false);
 
-   game = MDFNI_LoadGame(info->path);
-   if (!game)
+   if (!MDFNI_LoadGame(content_path, content_ext,
+         content_data, content_size))
       return false;
 
    surf = (MDFN_Surface*)calloc(1, sizeof(*surf));
@@ -1399,21 +1467,18 @@ bool retro_load_game(const struct retro_game_info *info)
    for (unsigned i = 0; i < MAX_PLAYERS; i++)
       PCEINPUT_SetInput(i, "gamepad", &input_buf[i][0]);
 
-   return game;
+   pce_led_state[RETRO_LED_POWER] = 1;
+
+   return true;
 }
 
 void retro_unload_game(void)
 {
-   if(!MDFNGameInfo)
-      return;
-
    MDFN_FlushGameCheats(0);
 
    PCE_CloseGame();
 
    MDFNMP_Kill();
-
-   MDFNGameInfo = NULL;
 
    for(unsigned i = 0; i < CDInterfaces.size(); i++)
       delete CDInterfaces[i];
@@ -1423,6 +1488,9 @@ void retro_unload_game(void)
 
 static void update_input(void)
 {
+   unsigned i,j;
+   int16_t joy_bits[MAX_PLAYERS] = {0};
+
    static int turbo_map[]     = { -1,-1,-1,-1,-1,-1,-1,-1, 1, 0,-1,-1,-1,-1,-1 };
    static int turbo_map_alt[] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 1, 0 };
    static unsigned map[] = {
@@ -1443,13 +1511,24 @@ static void update_input(void)
       RETRO_DEVICE_ID_JOYPAD_R3
    };
 
-   for (unsigned j = 0; j < MAX_PLAYERS; j++)
+   for (j = 0; j < MAX_PLAYERS; j++)
+   {
+      if (libretro_supports_bitmasks)
+         joy_bits[j] = input_state_cb(j, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+      else
+      {
+         for (i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3+1); i++)
+            joy_bits[j] |= input_state_cb(j, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
+      }
+   }
+
+   for (j = 0; j < MAX_PLAYERS; j++)
    {
       if (input_type[j] == RETRO_DEVICE_JOYPAD)             // Joypad
       {
          uint16_t input_state = 0;
 
-         for (unsigned i = 0; i < MAX_BUTTONS; i++)
+         for (i = 0; i < MAX_BUTTONS; i++)
          {
             if (turbo_enable[j][i] == 1) //Check whether a given button is turbo-capable
             {
@@ -1458,9 +1537,9 @@ static void update_input(void)
                if (turbo_counter[j][i] > (Turbo_Delay)) //When the counter exceeds turbo delay, fire and return to zero
                {
                   if(Turbo_Toggling == 2 && (i == 8 || i == 9) && !avpad6_enable[j])
-                     input_state |= input_state_cb(j, RETRO_DEVICE_JOYPAD, 0, map[i]) ? (1 << turbo_map[i]) : 0;
+                     input_state |= (joy_bits[j] & (1 << map[i])) ? (1 << turbo_map[i]) : 0;
                   else
-                     input_state |= input_state_cb(j, RETRO_DEVICE_JOYPAD, 0, map[i]) ? (1 << i) : 0;
+                     input_state |= (joy_bits[j] & (1 << map[i])) ? (1 << i) : 0;
 
                   turbo_counter[j][i] = 0;
                }
@@ -1479,19 +1558,18 @@ static void update_input(void)
                   }
                }
                else
-                  turbo_toggle_down[j][i] = 0;   
+                  turbo_toggle_down[j][i] = 0;
             }
-            else if(i == 12)
+            else if(i == RETRO_DEVICE_ID_JOYPAD_L2)
             {
                if(input_state_cb(j, RETRO_DEVICE_JOYPAD, 0, map[i]))
                {
                   if (avpad6_toggle_down[j] == 0)
                   {
                      avpad6_toggle_down[j] = 1;
-                     avpad6_enable[j] ^= (1 << 12);
+                     avpad6_enable[j] ^= (1 << RETRO_DEVICE_ID_JOYPAD_L2);
 
                      MDFN_DispMessage("Pad %i %s", j + 1, avpad6_enable[j] ? "6-buttons" : "2-buttons" );
-
 
                      int mode = !avpad6_enable[j] && (Turbo_Toggling == 2);
                      for(int lcv = 0; lcv < MAX_PLAYERS; lcv++)
@@ -1507,7 +1585,7 @@ static void update_input(void)
                input_state |= avpad6_enable[j];
             }
             else
-               input_state |= input_state_cb(j, RETRO_DEVICE_JOYPAD, 0, map[i]) ? (1 << i) : 0;
+               input_state |= (joy_bits[j] & (1 << map[i])) ? (1 << i) : 0;
          }
 
          if (disable_softreset == true)
@@ -1557,8 +1635,6 @@ static uint64_t video_frames, audio_frames;
 
 static float get_aspect_ratio(unsigned width, unsigned height)
 {
-   log_cb(RETRO_LOG_INFO, "Resolution: %d %d\n", vce_resolution.width, height);
-
    if(aspect_ratio == 0)
    {
       float par = (CLOCK_FREQ_NTSC / 2.0);
@@ -1571,7 +1647,7 @@ static float get_aspect_ratio(unsigned width, unsigned height)
          case 3: par /= 10738635.0; break;
          case 4: par /= 21477270.0; break;
       }
-      
+
       return (float) width / (float) height * par;
    }
    else if(aspect_ratio == 1)
@@ -1657,15 +1733,12 @@ static void hires_blending(bpp_t *fb, int width, int height, int pitch)
 }
 void retro_run(void)
 {
-   MDFNGI *curgame = (MDFNGI*)game;
-
    input_poll_cb();
 
    update_input();
 
    static int16_t sound_buf[0x10000];
    static int32_t rects[FB_HEIGHT];
-   static unsigned width = 0, height = 0;
    bool resolution_changed = false;
    rects[0] = ~0;
 
@@ -1683,8 +1756,6 @@ void retro_run(void)
    spec.CustomPalette = use_palette ? composite_palette : NULL;
    spec.CustomPaletteNumEntries = use_palette ? 512 : 0;
 
-   spec.IsFMV     = NULL;
-
    spec.InterlaceOn = false;
    spec.InterlaceField = false;
 
@@ -1697,10 +1768,6 @@ void retro_run(void)
    spec.SoundBuf = sound_buf;
    spec.SoundBufMaxSize = sizeof(sound_buf) / 2;
    spec.SoundBufSize = 0;
-   spec.SoundBufSizeALMS = 0;
-
-   spec.MasterCycles = 0;
-   spec.MasterCyclesALMS = 0;
 
    spec.SoundVolume = 1.0;
    spec.soundmultiplier = 1.0;
@@ -1716,34 +1783,34 @@ void retro_run(void)
 
    Emulate(&spec);
 
-   int16 *const SoundBuf = spec.SoundBuf + spec.SoundBufSizeALMS * curgame->soundchan;
-   int32 SoundBufSize = spec.SoundBufSize - spec.SoundBufSizeALMS;
-   const int32 SoundBufMaxSize = spec.SoundBufMaxSize - spec.SoundBufSizeALMS;
+   /* LED interface */
+   if (led_state_cb)
+      retro_led_interface();
 
-   spec.SoundBufSize = spec.SoundBufSizeALMS + SoundBufSize;
+#define PCE_SOUNDCHANS 2
+   const int32 SoundBufMaxSize = spec.SoundBufMaxSize;
 
-   if (width != spec.DisplayRect.w || height != spec.DisplayRect.h)
+   if (video_width != spec.DisplayRect.w || video_height != spec.DisplayRect.h)
       resolution_changed = true;
 
-   width  = spec.DisplayRect.w;
-   height = spec.DisplayRect.h;
-   
+   video_width  = spec.DisplayRect.w;
+   video_height = spec.DisplayRect.h;
+
    bpp_t *fb = surf->pixels + spec.DisplayRect.x + surf->pitch * spec.DisplayRect.y;
    
-   hires_blending(fb, width, height, FB_WIDTH);
+   hires_blending(fb, video_width, video_height, FB_WIDTH);
 
-   video_cb(fb, width, height, FB_WIDTH * sizeof(bpp_t));
+   video_cb(fb, video_width, video_height, FB_WIDTH * sizeof(bpp_t));
    audio_batch_cb(spec.SoundBuf, spec.SoundBufSize);
 
    bool updated = false;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
    {
       check_variables(true);
-      update_geometry(width, height);
+      update_geometry(video_width, video_height);
    }
-
-   if (resolution_changed)
-      update_geometry(width, height);
+   else if (resolution_changed)
+      update_geometry(video_width, video_height);
 
    video_frames++;
    audio_frames += spec.SoundBufSize;
@@ -1777,16 +1844,30 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 void retro_deinit()
 {
    if (surf)
+   {
+      if (surf->pixels)
+         free(surf->pixels);
+      surf->pixels = NULL;
       free(surf);
+   }
    surf = NULL;
 
    if (log_cb)
    {
-      log_cb(RETRO_LOG_INFO, "[%s]: Samples / Frame: %.5f\n",
+      log_cb(RETRO_LOG_DEBUG, "[%s]: Samples / Frame: %.5f\n",
             MEDNAFEN_CORE_NAME, (double)audio_frames / video_frames);
-      log_cb(RETRO_LOG_INFO, "[%s]: Estimated FPS: %.5f\n",
+      log_cb(RETRO_LOG_DEBUG, "[%s]: Estimated FPS: %.5f\n",
             MEDNAFEN_CORE_NAME, (double)video_frames * 44100 / audio_frames);
    }
+
+   libretro_supports_option_categories = false;
+   libretro_supports_bitmasks = false;
+   video_width = 0;
+   video_height = 0;
+   curindent = 0;
+   lastchar = 0;
+   last_sound_rate = 0.0;
+   failed_init = false;
 }
 
 unsigned retro_get_region(void)
@@ -1804,13 +1885,13 @@ void retro_set_controller_port_device(unsigned in_port, unsigned device)
    if (in_port < MAX_PLAYERS)
    {
       input_type[in_port] = device;
-      
+
       switch(device)
       {
          case RETRO_DEVICE_JOYPAD:
             PCEINPUT_SetInput(in_port, "gamepad", &input_buf[in_port][0]);
             break;
-   
+
          case RETRO_DEVICE_MOUSE:
             PCEINPUT_SetInput(in_port, "mouse", (uint8_t *) &mousedata[in_port][0]);
             break;
@@ -1821,6 +1902,8 @@ void retro_set_controller_port_device(unsigned in_port, unsigned device)
 void retro_set_environment(retro_environment_t cb)
 {
    struct retro_vfs_interface_info vfs_iface_info;
+   struct retro_led_interface led_interface;
+   bool option_categories = false;
    environ_cb = cb;
 
    static const struct retro_controller_description pads[] = {
@@ -1837,13 +1920,48 @@ void retro_set_environment(retro_environment_t cb)
       { 0 },
    };
 
-   libretro_set_core_options(environ_cb);
-   environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
+   static const struct retro_system_content_info_override content_overrides[] = {
+      {
+         "pce|sgx", /* extensions */
+         false,     /* need_fullpath */
+         false      /* persistent_data */
+      },
+      { NULL, false, false }
+   };
 
-   vfs_iface_info.required_interface_version = 1;
+   libretro_set_core_options(environ_cb, &option_categories);
+   libretro_supports_option_categories |= option_categories;
+
+   if (libretro_supports_option_categories)
+   {
+      struct retro_core_option_display option_display;
+
+      option_display.visible = false;
+      option_display.key     = "pce_show_advanced_input_settings";
+
+      environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY,
+            &option_display);
+   }
+   else
+   {
+      struct retro_core_options_update_display_callback update_display_cb;
+      update_display_cb.callback = update_option_visibility;
+
+      environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK,
+            &update_display_cb);
+   }
+
+   environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
+   environ_cb(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, (void*)content_overrides);
+
+   vfs_iface_info.required_interface_version = 2;
    vfs_iface_info.iface                      = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
       filestream_vfs_init(&vfs_iface_info);
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_LED_INTERFACE, &led_interface))
+      if (led_interface.set_led_state && !led_state_cb)
+         led_state_cb = led_interface.set_led_state;
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb)
@@ -1877,6 +1995,7 @@ size_t retro_serialize_size(void)
    size_t serialize_size;
 
    st.data           = NULL;
+   st.data_frontend  = NULL;
    st.loc            = 0;
    st.len            = 0;
    st.malloced       = 0;
@@ -1904,22 +2023,24 @@ bool retro_serialize(void *data, size_t size)
 {
    StateMem st;
    bool ret          = false;
-   uint8_t *_dat     = (uint8_t*)malloc(size);
 
-   if (!_dat)
-      return false;
-
-   /* Mednafen can realloc the buffer so we need to ensure this is safe. */
-   st.data           = _dat;
+   st.data_frontend  = (uint8_t*)data;
+   st.data           = st.data_frontend;
    st.loc            = 0;
    st.len            = 0;
    st.malloced       = size;
    st.initial_malloc = 0;
 
+   /* MDFNSS_SaveSM will malloc separate memory for st.data to complete
+    * the save if the passed-in size is too small */
    ret = MDFNSS_SaveSM(&st, 0, 0, NULL, NULL, NULL);
 
-   memcpy(data, st.data, size);
-   free(st.data);
+   if (st.data != st.data_frontend)
+   {
+      log_cb(RETRO_LOG_WARN, "Save state size has increased\n");
+      free(st.data);
+      ret = false;
+   }
 
    return ret;
 }
@@ -1928,7 +2049,8 @@ bool retro_unserialize(const void *data, size_t size)
 {
    StateMem st;
 
-   st.data           = (uint8_t*)data;
+   st.data_frontend  = (uint8_t*)data;
+   st.data           = st.data_frontend;
    st.loc            = 0;
    st.len            = size;
    st.malloced       = 0;
@@ -1941,17 +2063,17 @@ void *retro_get_memory_data(unsigned type)
 {
    switch (type)
    {
-   case RETRO_MEMORY_SAVE_RAM:
-      if (IsPopulous)
-         return (uint8_t*)PopRAM;
+      case RETRO_MEMORY_SAVE_RAM:
+         if (IsPopulous)
+            return (uint8_t*)PopRAM;
 
-      return (uint8_t*)SaveRAM;
+         return (uint8_t*)SaveRAM;
 
-   case RETRO_MEMORY_SYSTEM_RAM:
-      return BaseRAM;
-       
-   default:
-      break;
+      case RETRO_MEMORY_SYSTEM_RAM:
+         return BaseRAM;
+
+      default:
+         break;
    }
 
    return NULL;
@@ -1996,11 +2118,10 @@ static void sanitize_path(std::string &path)
 // Use a simpler approach to make sure that things go right for libretro.
 std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
 {
-   char slash;
 #ifdef _WIN32
-   slash = '\\';
+   char slash = '\\';
 #else
-   slash = '/';
+   char slash = '/';
 #endif
    std::string ret;
    switch (type)
@@ -2011,8 +2132,8 @@ std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
       sanitize_path(ret); // Because Windows path handling is mongoloid.
 #endif
       break;
-     
-   default:     
+
+   default:
       break;
    }
 
@@ -2020,21 +2141,6 @@ std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
       log_cb(RETRO_LOG_INFO, "MDFN_MakeFName: %s\n", ret.c_str());
    return ret;
 }
-
-void MDFND_Message(const char *str)
-{
-   if (log_cb)
-      log_cb(RETRO_LOG_INFO, "%s\n", str);
-}
-
-void MDFND_PrintError(const char* err)
-{
-   if (log_cb)
-      log_cb(RETRO_LOG_ERROR, "%s\n", err);
-}
-
-/* forward declarations */
-extern void MDFND_DispMessage(unsigned char *str);
 
 void MDFND_DispMessage(unsigned char *str)
 {
@@ -2061,20 +2167,12 @@ void MDFN_DispMessage(const char *format, ...)
    strc = str;
 
    msg.frames = 180;
-   msg.msg = strc;
+   msg.msg    = strc;
 
    environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 }
 
 void MDFN_MidSync(EmulateSpecStruct *espec)
 {
-   //if(!MDFNnetplay)
-   {
-      //ProcessAudio(espec);
-
-      //espec->SoundBufSizeALMS = espec->SoundBufSize;
-      //espec->MasterCyclesALMS = espec->MasterCycles;
-
-      PCEINPUT_TransformInput();
-   }
+   PCEINPUT_TransformInput();
 }

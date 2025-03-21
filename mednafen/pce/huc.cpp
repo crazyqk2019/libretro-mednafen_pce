@@ -182,28 +182,7 @@ static DECLFW(MCG_WriteHandler)
 	mcg->Write(HuCPU.Timestamp(), A, V);
 }
 
-static void LoadSaveMemory(const std::string& path, uint8* const data, const uint64 len, bool possibly_gz = false)
-{
-#if 0
-	try
-	{
-		std::unique_ptr<Stream> fp((Stream*)(new FileStream(path, FileStream::MODE_READ)));
-		const uint64 fp_size_tmp = fp->size();
-
-		if(fp_size_tmp != len)
-			throw MDFN_Error("Save game memory file \"%s\" is an incorrect size(%llu bytes).  The correct size is %llu bytes.", path.c_str(), (unsigned long long)fp_size_tmp, (unsigned long long)len);
-
-		fp->read(data, len);
-	}
-	catch(MDFN_Error &e)
-	{
-		if(e.GetErrno() != ENOENT)
-			throw;
-	}
-#endif
-}
-
-uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
+uint32 HuC_Load(const uint8_t *data, size_t size, bool DisableBRAM, SysCardType syscard)
 {
 	uint32 crc = 0;
 	const uint32 sf2_threshold = 2048 * 1024;
@@ -213,24 +192,23 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 
 	uint64 len, m_len;
 
-	len = fp->size;
+	len = size;
 	if(len & 512)	// Skip copier header.
 	{
 		len &= ~512;
-		file_seek(fp, 512, SEEK_SET);
+		data += 512;
+		size -= 512;
 	}
 	m_len = (len + 8191) &~ 8191;
 
-	if(len >= 8192)
+	if(size >= 8192)
 	{
 		uint8 buf[8192];
 
-		file_read(fp, buf, 8192, 1);
+		memcpy(buf, data, 8192);
 
 		if(!memcmp(buf + 0x1FD0, "MCGENJIN", 8))
 			mcg_mapper = true;
-
-		file_seek(fp, -8192, SEEK_CUR);	// Seek backwards so we don't undo skip copier header.
 	}
 
 	if(!syscard && m_len >= sf2_threshold && !mcg_mapper)
@@ -243,12 +221,7 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 		else
 			m_len = round_up_pow2(m_len - 512 * 1024) + 512 * 1024;
 
-		if(m_len > 8912896)
-			MDFN_printf("ROM image is too large for extended SF2 mapper!");
-
 		HuCSF2BankMask = ((m_len - 512 * 1024) / (512 * 1024)) - 1;
-
-		//printf("%d %d, %02x\n", len, m_len, HuCSF2BankMask);
 	}
 
 	IsPopulous = 0;
@@ -273,7 +246,7 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 
 	if(mcg_mapper)
 	{
-		mcg = new MCGenjin(fp);
+		mcg = new MCGenjin(data, size);
 
 		for(unsigned i = 0; i < 128; i++)
 		{
@@ -293,7 +266,6 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 
 				tmp_buf.resize(nvs);
 
-				//LoadSaveMemory(MDFN_MakeFName(MDFNMKF_SAV, 0, buf), &tmp_buf[0], tmp_buf.size(), false);
 				mcg->WriteNV(i, &tmp_buf[0], 0, tmp_buf.size());
 			}
 		}
@@ -303,11 +275,8 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 
 	HuCROM = new uint8[m_len];
 	memset(HuCROM, 0xFF, m_len);
-	file_read(fp, HuCROM, min_T<uint64>(m_len, len), 1);
+	memcpy(HuCROM, data, min_T<uint64>(m_len, size));
 	crc = encoding_crc32(0, HuCROM, min_T<uint64>(m_len, len));
-
-	if(syscard == SYSCARD_NONE)
-		MDFN_printf("ROM:       %lluKiB\n", (unsigned long long)((m_len < len) ? m_len : len) / 1024);
 
 	if(m_len == 0x60000)
 	{
@@ -395,10 +364,7 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 			PopRAM = new uint8[32768];
 			memset(PopRAM, 0xFF, 32768);
 
-			//LoadSaveMemory(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav"), PopRAM, 32768);
-
 			IsPopulous = 1;
-			MDFN_printf("Populous\n");
 			for(int x = 0x40; x < 0x44; x++)
 			{
 				ROMMap[x] = &PopRAM[(x & 3) * 8192] - x * 8192;
@@ -414,10 +380,7 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 			TsushinRAM = new uint8[0x8000];
 			memset(TsushinRAM, 0xFF, 0x8000);
 
-			//LoadSaveMemory(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav"), TsushinRAM, 32768);
-
 			IsTsushin = 1;
-			MDFN_printf("Tsushin Booster\n");
 			for(int x = 0x88; x < 0x8C; x++)
 			{
 				ROMMap[x] = &TsushinRAM[(x & 3) * 8192] - x * 8192;
@@ -443,7 +406,6 @@ uint32 HuC_Load(MDFNFILE* fp, bool DisableBRAM, SysCardType syscard)
 			}
 			HuCPU.SetWriteHandler(0, HuCSF2Write);
 
-			MDFN_printf("Street Fighter 2 Mapper\n");
 			HuCSF2Latch = 0;
 		}
 	}	// end else to if(syscard)
@@ -460,8 +422,6 @@ BRAM_Init:
 		// in the CD BIOS screen.
 		memset(SaveRAM, 0x00, 2048);
 		memcpy(SaveRAM, BRAM_Init_String, 8);
-
-		//LoadSaveMemory(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav"), SaveRAM, 2048);
 
 		HuCPU.SetWriteHandler(0xF7, SaveRAMWrite);
 		HuCPU.SetReadHandler(0xF7, SaveRAMRead);

@@ -141,11 +141,11 @@ void PCEINPUT_SetInput(unsigned port, const char *type, uint8 *ptr)
 {
 	assert(port < 5);
 
-	if(!strcasecmp(type, "gamepad"))
+	if(!strcmp(type, "gamepad"))
 		InputTypes[port] = PCEINPUT_GAMEPAD;
-	else if(!strcasecmp(type, "mouse"))
+	else if(!strcmp(type, "mouse"))
 		InputTypes[port] = PCEINPUT_MOUSE;
-	else if(!strcasecmp(type, "tsushinkb"))
+	else if(!strcmp(type, "tsushinkb"))
 		InputTypes[port] = PCEINPUT_TSUSHINKB;
 	else
 		InputTypes[port] = PCEINPUT_NONE;
@@ -171,13 +171,9 @@ void INPUT_AdjustTS(int32 delta_timestamp)
 
 static INLINE uint8 RealPortRead(int32 timestamp, int which)
 {
-	uint8 ret = 0xF;
-
-	//printf("RealInputRead: %d %d\n", which, timestamp);
 	if(devices[which])
-		ret = devices[which]->Read(timestamp);
-
-	return(ret);
+		return devices[which]->Read(timestamp);
+	return 0xF;
 }
 
 static INLINE void RealPortWrite(int32 timestamp, int which, bool old_SEL, bool new_SEL, bool old_CLR, bool new_CLR)
@@ -205,16 +201,11 @@ static INLINE void MultiTapWrite(int32 timestamp, bool old_SEL, bool new_SEL, bo
 
 	// SEL held high, CLR transitions from 0->1, reset counter.
 	// Scratch that, only check if SEL is high on the write that changes CLR from 0 to 1, to fix "Strip Fighter".
-	if(/*old_SEL &&*/ new_SEL && !old_CLR && new_CLR)
-	{
-		//puts("Reset read index");
-
+	if(new_SEL && !old_CLR && new_CLR)
 		read_index = 0;
-	}
 	// CLR held low, SEL transitions from 0->1, increment counter.
 	else if(!old_CLR && !new_CLR && !old_SEL && new_SEL)
 	{
-		//puts("Increment read index");
 		if(read_index < 255)
 			read_index++;
 	}
@@ -224,17 +215,10 @@ uint8 INPUT_Read(int32 timestamp, unsigned int A)
 {
 	uint8 ret;
 
- //{
- // extern VCE *vce;
- // printf("Input Read: %04x, %d\n", A, vce->GetScanlineNo());
- //}
-
 	if(MultiTapEnabled && InputTypes[0] != PCEINPUT_TSUSHINKB)
 		ret = MultiTapRead(timestamp);
 	else
 		ret = RealPortRead(timestamp, 0);
-
-	//printf("Input read: %04x, %02x\n",A,ret);
 
 	if(!PCE_IsCD)
 		ret |= 0x80; // Set when CDROM is not attached
@@ -248,7 +232,6 @@ uint8 INPUT_Read(int32 timestamp, unsigned int A)
 
 void INPUT_Write(int32 timestamp, unsigned int A, uint8 V)
 {
-	//printf("Input Write: %04x, %02x\n", A, V);
 	bool new_SEL = V & 0x1;
 	bool new_CLR = V & 0x2;
 
@@ -300,7 +283,6 @@ int INPUT_StateAction(StateMem *sm, int load, int data_only)
 
 static void SyncSettings(void)
 {
-	MDFNGameInfo->mouse_sensitivity = MDFN_GetSettingF("pce.mouse_sensitivity");
 	MultiTapEnabled = MDFN_GetSettingB("pce.input.multitap");
 	DisableSR = MDFN_GetSettingB("pce.disable_softreset");
 }
